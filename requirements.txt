@@ -1,0 +1,7 @@
+Flask>=2.0
+google-auth>=2.0
+google-auth-oauthlib>=0.7
+requests>=2.20
+secops>=0.2.0 # As per the problem description, this is a pypi project
+gunicorn # For App Engine deployment
+dotenv

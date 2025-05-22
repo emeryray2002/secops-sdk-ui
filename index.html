@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecOps SDK UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.0/jsoneditor.min.css" rel="stylesheet" type="text/css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.0/jsoneditor.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#172033' 
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* Form element styles */
+        .form-input, .form-textarea, .form-select {
+            @apply bg-white border-2 border-slate-300 text-slate-900 text-base rounded-lg shadow-inner block w-full p-4
+                   placeholder-slate-500 transition-all duration-200 ease-in-out hover:border-sky-600 
+                   focus:ring-2 focus:ring-sky-500 focus:border-sky-400 focus:outline-none;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+            color: #0f172a; /* slate-900 equivalent, making text very close to black */
+            min-width: 100%; /* Ensure inputs take full width */
+        }
+        /* Add a subtle glow effect on focus */
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.3), inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+            color: #020617; /* slate-950 equivalent, almost black */
+        }
+
+        /* Label styles */
+        label {
+            @apply text-sm font-semibold text-sky-300 transition-all duration-200 ease-in-out mb-2 block;
+            letter-spacing: 0.02em;
+        }
+        .form-input:focus + label, .form-textarea:focus + label, .form-select:focus + label {
+            @apply text-sky-400;
+        }
+        
+        /* Add a nice highlight effect for required fields */
+        .required-label::after {
+            content: '*';
+            color: #fb7185; /* rose-500 */
+            margin-left: 0.25rem;
+            font-size: 1.1em;
+        }
+        
+        /* Form group styling */
+        .form-group {
+            @apply relative mb-6 rounded-lg border border-slate-700 p-5 bg-slate-800/50;
+            transition: all 0.2s ease-in-out;
+            width: 100%; /* Ensure form groups take full width */
+        }
+        
+        /* Form wrapper styling */
+        form {
+            width: 100%;
+            max-width: none !important;
+        }
+        
+        /* Input container styling */
+        .form-group .relative {
+            width: 100%;
+        }
+        
+        .form-group:hover {
+            @apply border-sky-700 bg-slate-800;
+        }
+        .form-group:hover label {
+            @apply text-sky-300;
+        }
+        /* Add subtle indicator for form focus */
+        .form-group::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background: rgb(14, 165, 233);
+            border-radius: 4px 0 0 4px;
+            transform: scaleY(0);
+            transform-origin: top;
+            transition: transform 0.2s ease-in-out;
+            opacity: 0;
+        }
+        .form-group:focus-within::before {
+            transform: scaleY(1);
+            opacity: 1;
+        }
+        .form-group:focus-within {
+            @apply border-sky-500 bg-slate-800;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .form-checkbox, .form-radio {
+            @apply w-5 h-5 text-sky-600 bg-slate-700 border-slate-600 rounded focus:ring-sky-500 focus:ring-2;
+        }
+        .btn {
+            @apply px-5 py-3 text-base font-medium rounded-lg transition-all duration-200 shadow-sm;
+        }
+        .btn-primary {
+            @apply bg-sky-600 text-white hover:bg-sky-700 focus:ring-4 focus:outline-none focus:ring-sky-500/30 hover:shadow-md hover:-translate-y-0.5;
+            box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2), 0 2px 4px -1px rgba(14, 165, 233, 0.1);
+        }
+        .btn-secondary {
+            @apply bg-slate-600 text-slate-200 hover:bg-slate-700 focus:ring-4 focus:outline-none focus:ring-slate-500/30 hover:shadow-md hover:-translate-y-0.5;
+        }
+        .btn-danger {
+             @apply bg-red-600 text-white hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-500/30 hover:shadow-md hover:-translate-y-0.5;
+        }
+        .tool-section { display: none; }
+        .tool-section.active { display: block; }
+        .history-item { cursor: pointer; }
+        .history-item:hover { background-color: #334155; }
+        
+        .env-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        .env-status-ok { background-color: #22c55e; }
+        .env-status-error { background-color: #ef4444; }
+        .env-status-auth_error { background-color: #f97316; }
+        .env-status-unknown { background-color: #64748b; }
+        .sticky-header { position: sticky; top: 0; z-index: 50; }
+        .param-group { 
+            @apply border border-slate-600 p-6 rounded-lg space-y-4 mb-6 bg-slate-800/50;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 100%;
+        }
+        .param-group-title { 
+            @apply text-sm font-semibold text-sky-300 px-3 -mt-6 mb-2 bg-slate-800 inline-block border border-slate-600 rounded-md py-1;
+        }
+        
+        /* JSON Viewer Styling */
+        .jsoneditor {
+            border: 1px solid #334155 !important;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            height: 100%;
+            background-color: #0f172a;
+        }
+        .jsoneditor-menu {
+            background-color: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+        }
+        .jsoneditor-navigation-bar {
+            background-color: #1e293b !important;
+            border-bottom: 1px solid #334155 !important;
+            color: #cbd5e1 !important;
+        }
+        .jsoneditor-poweredBy {
+            color: #64748b !important;
+        }
+        .jsoneditor-poweredBy a {
+            color: #7dd3fc !important;
+        }
+        .jsoneditor-search input {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+            border: 1px solid #475569 !important;
+        }
+        div.jsoneditor-tree, div.jsoneditor-tree div.jsoneditor-tree-inner, div.jsoneditor textarea.jsoneditor-text {
+            background-color: #0f172a !important;
+            color: #f8fafc !important;
+        }
+        .jsoneditor-field, .jsoneditor-value {
+            color: #f8fafc !important;
+        }
+        .jsoneditor-field {
+            color: #7dd3fc !important;
+        }
+        .jsoneditor-value.jsoneditor-string {
+            color: #86efac !important;
+        }
+        .jsoneditor-value.jsoneditor-number {
+            color: #c4b5fd !important;
+        }
+        .jsoneditor-value.jsoneditor-boolean {
+            color: #fb923c !important;
+        }
+        .jsoneditor-value.jsoneditor-null {
+            color: #f87171 !important;
+        }
+        div.jsoneditor-tree button.jsoneditor-button {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+        }
+        div.jsoneditor-tree button.jsoneditor-contextmenu {
+            background-color: #1e293b !important;
+        }
+        div.jsoneditor-contextmenu {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1) !important;
+        }
+        div.jsoneditor-contextmenu ul li button.jsoneditor-selected, 
+        div.jsoneditor-contextmenu ul li button.jsoneditor-selected:hover,
+        div.jsoneditor-contextmenu ul li button.jsoneditor-selected:focus {
+            background-color: #0284c7 !important;
+            color: white !important;
+        }
+        div.jsoneditor-contextmenu ul li button:hover, 
+        div.jsoneditor-contextmenu ul li button:focus {
+            background-color: #334155 !important;
+        }
+        div.jsoneditor-contextmenu .jsoneditor-icon {
+            filter: invert(1);
+        }
+        div.jsoneditor-contextmenu ul li ul {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+        }
+        div.jsoneditor-highlight {
+            background-color: #0369a1 !important;
+        }
+        .jsoneditor-text {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        }
+        .jsoneditor-tree {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        }
+        .json-output-wrapper {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .json-output-toolbar {
+            position: absolute;
+            top: 6px;
+            right: 10px;
+            z-index: 10;
+        }
+        .json-toolbar-btn {
+            @apply bg-slate-700 hover:bg-slate-600 text-slate-200 p-1 rounded-md text-xs mr-1;
+        }
+        .json-output-content {
+            width: 100%;
+            height: 100%;
+            flex: 1;
+        }
+        .ace_editor.ace-jsoneditor {
+            background-color: #0f172a !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_marker-layer .ace_active-line {
+            background-color: #1e293b !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_gutter {
+            background-color: #1e293b !important;
+            color: #64748b !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_print-margin {
+            background-color: #334155 !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_cursor {
+            color: #f8fafc !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_string {
+            color: #86efac !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_constant.ace_numeric {
+            color: #c4b5fd !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_variable {
+            color: #7dd3fc !important;
+        }
+        .ace_editor.ace-jsoneditor .ace_keyword {
+            color: #fb923c !important;
+        }
+        
+        /* Expanded output styles */
+        .output-expanded {
+            position: fixed;
+            top: 5vh;
+            left: 5vw;
+            right: 5vw;
+            height: 90vh;
+            z-index: 100;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Add responsive height settings for different screen sizes */
+        @media (min-height: 900px) {
+            #outputContainer {
+                min-height: 800px;
+            }
+        }
+        
+        @media (min-height: 1100px) {
+            #outputContainer {
+                min-height: 900px;
+            }
+        }
+        
+        @media (min-height: 1300px) {
+            #outputContainer {
+                min-height: 1100px;
+            }
+        }
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 99;
+            backdrop-filter: blur(3px);
+        }
+        
+        /* Transition for smooth expand/collapse */
+        #outputContainer {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-300 flex h-screen overflow-hidden">
+
+    <aside class="w-72 bg-slate-850 p-4 space-y-6 overflow-y-auto border-r border-slate-700">
+        <div>
+            <h1 class="text-2xl font-semibold text-sky-400 mb-1">SecOps SDK</h1>
+            <div class="text-xs text-slate-400 mb-3">User: <span id="userName" class="font-medium">{{ user_name }}</span> (<span id="userEmail" class="font-medium">{{ user_email }}</span>)</div>
+            <a href="{{ url_for('logout') }}" class="text-sm text-rose-500 hover:text-rose-400">Logout</a>
+        </div>
+
+        <div class="space-y-2">
+            <div class="flex justify-between items-center">
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Environments</h2>
+                <button id="manageEnvsBtn" class="text-sky-400 hover:text-sky-300 text-xs"><i class="fas fa-cog"></i> Manage</button>
+            </div>
+            <div id="environmentsList" class="space-y-1 max-h-40 overflow-y-auto"></div>
+            <div class="text-xs text-slate-500">Selected: <span id="selectedEnvName" class="font-semibold text-sky-400">None</span></div>
+        </div>
+        
+        <nav id="toolMenu" class="space-y-3"></nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="bg-slate-800 p-4 border-b border-slate-700 sticky-header">
+            <h2 id="currentToolTitle" class="text-xl font-semibold text-sky-400">Welcome</h2>
+        </header>
+
+        <div class="flex-1 p-8 overflow-y-auto space-y-8 flex flex-col">
+            <div id="toolUiContainer" class="bg-slate-800 p-8 rounded-lg shadow-lg flex-shrink-0 max-w-full">
+                <p class="text-slate-300">Select a tool from the menu to get started.</p>
+            </div>
+
+            <div id="outputContainer" class="bg-slate-800 p-8 rounded-lg shadow-lg flex-1 flex flex-col min-h-[500px]">
+                 <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-slate-200">Output</h3>
+                    <div class="flex space-x-2">
+                        <button id="expandOutputBtn" class="btn btn-secondary"><i class="fas fa-expand"></i> Expand</button>
+                        <button id="copyOutputBtn" class="btn btn-secondary hidden"><i class="fas fa-copy"></i> Copy</button>
+                        <button id="toggleViewBtn" class="btn btn-secondary hidden"><i class="fas fa-code"></i> Text/Tree</button>
+                        <button id="expandAllBtn" class="btn btn-secondary hidden"><i class="fas fa-expand-alt"></i> Expand All</button>
+                        <button id="collapseAllBtn" class="btn btn-secondary hidden"><i class="fas fa-compress-alt"></i> Collapse All</button>
+                        <button id="clearOutputBtn" class="btn btn-secondary"><i class="fas fa-times"></i> Clear</button>
+                    </div>
+                </div>
+                <div id="jsonOutputWrapper" class="json-output-wrapper hidden flex-1">
+                    <div id="jsonOutput" class="json-output-content"></div>
+                </div>
+                <pre id="outputContent" class="text-base text-white whitespace-pre-wrap break-all overflow-auto flex-1 p-4 bg-slate-850 rounded-md border border-slate-700">No output yet.</pre>
+            </div>
+        </div>
+    </main>
+
+    <div id="envModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden backdrop-blur-sm transition-all duration-300">
+        <div class="bg-slate-800 p-8 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-600">
+            <h2 class="text-2xl font-semibold mb-6 text-sky-400 pb-2 border-b border-slate-700">Manage Environments</h2>
+            <div class="flex-1 overflow-y-auto pr-2 space-y-4 mb-6">
+                <div id="envModalList" class="space-y-3"></div>
+            </div>
+            <form id="envForm" class="space-y-6 mb-6">
+                <h3 id="envFormTitle" class="text-lg font-medium text-slate-200 mb-4">Add New Environment</h3>
+                <input type="hidden" id="envEditIndex" value="-1">
+                <div class="form-group">
+                    <label for="envNameInput" class="block mb-2 text-sm font-medium text-slate-200 required-label">Display Name</label>
+                    <input type="text" id="envNameInput" name="name" class="form-input" placeholder="e.g., Chronicle Prod US" required>
+                </div>
+                <div class="form-group">
+                    <label for="envCustomerIdInput" class="block mb-2 text-sm font-medium text-slate-200 required-label">Customer ID</label>
+                    <input type="text" id="envCustomerIdInput" name="customerId" class="form-input" placeholder="Chronicle Instance ID (UUID)" required>
+                </div>
+                <div class="form-group">
+                    <label for="envProjectIdInput" class="block mb-2 text-sm font-medium text-slate-200 required-label">GCP Project ID</label>
+                    <input type="text" id="envProjectIdInput" name="projectId" class="form-input" placeholder="GCP Project ID" required>
+                </div>
+                <div class="form-group">
+                    <label for="envRegionInput" class="block mb-2 text-sm font-medium text-slate-200 required-label">Region</label>
+                    <input type="text" id="envRegionInput" name="region" class="form-input" value="us" placeholder="e.g., us, europe" required>
+                </div>
+            </form>
+            <div class="flex justify-end space-x-4">
+                <button id="saveEnvBtn" class="btn btn-primary px-6 py-3 flex items-center">
+                    <i class="fas fa-save mr-2"></i>Save Environment
+                </button>
+                <button id="cancelEnvBtn" class="btn btn-secondary px-6 py-3">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="historyModal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+        <div class="bg-slate-800 p-8 rounded-xl shadow-xl w-full max-w-3xl max-h-[70vh] flex flex-col border border-slate-600">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="historyModalTitle" class="text-xl font-semibold text-sky-400">Execution History</h2>
+                <button id="closeHistoryModalBtn" class="text-slate-400 hover:text-slate-200"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="historyModalContent" class="flex-1 overflow-y-auto text-base space-y-4"></div>
+            <div class="mt-6 flex justify-end">
+                 <button id="clearHistoryBtn" class="btn btn-danger"><i class="fas fa-trash mr-2"></i> Clear All History</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="notificationToast" class="fixed bottom-5 right-5 bg-sky-500 text-white py-2 px-4 rounded-lg shadow-md text-sm hidden z-[100] transition-opacity duration-300">
+        <span id="notificationMessage">Notification</span>
+    </div>
+
+<script>
+    const flaskAppUrl = '{{ flask_app_url }}';
+    let environments = [];
+    let selectedEnvIndex = -1;
+    let executionHistory = [];
+    let jsonEditor = null;
+    let isOutputExpanded = false;
+    const MAX_HISTORY_PER_TOOL = 5;
+    const MAX_TOTAL_HISTORY_ITEMS = 50;
+
+    const toolDefinitions = {
+        "Search & Investigate": [
+            { id: "search_udm_events", name: "Search UDM Events", endpoint: "/api/tools/search_udm_events", group: "Search & Investigate",
+              params: [
+                { name: "query_type", label: "Query Input Type", type: "select", options: [{value: "udm", text:"UDM Query"}, {value:"nl", text:"Natural Language"}], default: "udm", required: true },
+                { name: "query", label: "UDM Query", type: "textarea", rows:3, placeholder: 'metadata.event_type = "NETWORK_CONNECTION"', show_if: "query_type=udm", required_if_shown: true },
+                { name: "nl_query", label: "Natural Language Query", type: "text", placeholder: 'show me failed login attempts', show_if: "query_type=nl", required_if_shown: true },
+                { name: "max_events", label: "Max Events", type: "number", default: 100, optional: true, min: 1 },
+                { name: "csv_export", label: "Export as CSV?", type: "checkbox", optional: true, show_if: "query_type=udm" },
+                { name: "fields_for_csv", label: "CSV Fields (comma-separated)", type: "text", placeholder: "metadata.event_timestamp,principal.ip", optional: true, show_if: "csv_export=true" },
+              ],
+              time_params: true, output_type: "json_or_csv"
+            },
+            { id: "get_statistics", name: "Get Statistics", endpoint: "/api/tools/search_stats", group: "Search & Investigate",
+              params: [
+                { name: "query", label: "Stats Query (YARA-L like)", type: "textarea", rows:5, placeholder: 'metadata.event_type = "NETWORK_CONNECTION"\nmatch:\n  target.hostname\noutcome:\n  $count = count(metadata.id)\norder:\n  $count desc', required: true },
+                { name: "max_events_processed", label: "Max Events to Process", type: "number", default: 1000, optional: true },
+                { name: "max_values_returned", label: "Max Values per Field", type: "number", default: 100, optional: true },
+              ],
+              time_params: true
+            },
+            { id: "entity_summary", name: "Get Entity Information", endpoint: "/api/tools/entity_summary", group: "Search & Investigate",
+              params: [
+                { name: "entity_value", label: "Entity Value", type: "text", placeholder: "IP, Domain, Hash, User, etc.", required: true },
+                { name: "preferred_entity_type", label: "Entity Type Hint", type: "select", optional: true, options: [
+                    {value: "", text: "Autodetect"}, {value:"ASSET", text:"Asset (IP/Hostname)"}, {value:"FILE", text:"File (Hash)"},
+                    {value:"DOMAIN_NAME", text:"Domain"}, {value:"USER", text:"User (Email/Username)"},
+                     // Add other relevant types if known from SDK like IP_ADDRESS, MAC
+                    {value:"IP_ADDRESS", text:"IP Address"}, {value:"MAC", text:"MAC Address"},
+                    {value:"HASH_MD5", text:"MD5 Hash"}, {value:"HASH_SHA1", text:"SHA1 Hash"}, {value:"HASH_SHA256", text:"SHA256 Hash"},
+                    {value:"EMAIL", text:"Email"}
+                ]},
+              ],
+              time_params: true
+            },
+            { id: "query_validation", name: "Validate Query Syntax", endpoint: "/api/tools/validate_query", group: "Search & Investigate",
+              params: [
+                { name: "query_to_validate", label: "Query to Validate (UDM or Stats)", type: "textarea", rows: 4, required: true }
+              ]
+            },
+            { id: "translate_nl_to_udm", name: "Translate Natural Language to UDM", endpoint: "/api/tools/translate_nl_to_udm", group: "Search & Investigate",
+              params: [
+                { name: "natural_language_text", label: "Natural Language Text", type: "textarea", rows: 2, required: true }
+              ]
+            }
+        ],
+        "Threat Intelligence": [
+            { id: "list_iocs", name: "List Indicators of Compromise (IoCs)", endpoint: "/api/tools/list_iocs", group: "Threat Intelligence",
+              params: [
+                { name: "max_matches", label: "Max Matches", type: "number", default: 100, optional: true, min:1 },
+                { name: "add_mandiant_attributes", label: "Include Mandiant Attributes?", type: "checkbox", checked: true, optional: true },
+                { name: "prioritized_only", label: "Prioritized IoCs Only?", type: "checkbox", optional: true },
+              ],
+              time_params: true
+            }
+        ],
+        "Log Management": [
+            { id: "log_ingest_raw", name: "Ingest Raw Logs", endpoint: "/api/tools/log_ingest", group: "Log Management",
+              params: [
+                { name: "log_type", label: "Log Type", type: "text", placeholder: "e.g., OKTA, WINDOWS_EVENTLOG_XML", required: true },
+                { name: "log_message_content", label: "Log Message(s) Content", type: "textarea", rows:5, placeholder: "Single log string or JSON array of log strings.", required: true },
+                // { name: "log_file_path", label: "Log File Path (Server-side)", type: "text", optional: true, note: "Use Log Message Content for UI input." },
+                { name: "log_entry_time_iso", label: "Log Entry Time (ISO)", type: "datetime-local", optional: true, placeholder: "Defaults to now if blank" },
+                { name: "collection_time_iso", label: "Collection Time (ISO)", type: "datetime-local", optional: true, placeholder: "Defaults to now if blank" },
+                { name: "forwarder_id", label: "Forwarder ID", type: "text", optional: true },
+                { name: "force_unknown_log_type", label: "Force Unknown Log Type?", type: "checkbox", optional: true },
+                { name: "labels_input", label: "Labels (JSON string or k=v,k=v)", type: "text", placeholder: '{"env":"prod"} or env=prod,app=web', optional: true },
+              ]
+            },
+            { id: "log_ingest_udm_events", name: "Ingest UDM Events", endpoint: "/api/tools/log_ingest_udm", group: "Log Management",
+              params: [
+                { name: "udm_events_json", label: "UDM Event(s) (JSON string)", type: "textarea", rows: 5, placeholder: "Single UDM JSON object or array of objects.", required: true },
+              ]
+            },
+            { id: "log_types_list_all", name: "List Available Log Types", endpoint: "/api/tools/log_types_list", group: "Log Management",
+              params: [
+                { name: "search_term_log_types", label: "Search Term (for log types)", type: "text", optional: true },
+              ]
+            }
+        ],
+        "Detection Rules": [
+            { id: "rule_list_all", name: "List Detection Rules", endpoint: "/api/tools/rule_list", group: "Detection Rules", params: [] },
+            { id: "rule_get_details", name: "Get Rule Details", endpoint: "/api/tools/rule_get", group: "Detection Rules",
+              params: [ { name: "rule_id", label: "Rule ID or Versioned ID", type: "text", placeholder: "ru_xxxx or ru_xxxx@v_123_456", required: true } ]
+            },
+            { id: "rule_create_new", name: "Create Detection Rule", endpoint: "/api/tools/rule_create", group: "Detection Rules",
+              params: [ { name: "rule_content_text", label: "Rule Text (YARA-L 2.0)", type: "textarea", rows:10, required: true } ]
+            },
+            { id: "rule_update_existing", name: "Update Detection Rule", endpoint: "/api/tools/rule_update", group: "Detection Rules",
+              params: [
+                { name: "rule_id_to_update", label: "Rule ID (to update)", type: "text", required: true },
+                { name: "updated_rule_content_text", label: "Updated Rule Text (YARA-L)", type: "textarea", rows:10, required: true }
+              ]
+            },
+            { id: "rule_enable_disable", name: "Enable/Disable Rule", endpoint: "/api/tools/rule_enable", group: "Detection Rules",
+              params: [
+                { name: "rule_id_for_state_change", label: "Rule ID", type: "text", required: true },
+                { name: "enable_rule_flag", label: "Enable Rule?", type: "checkbox", checked: true, required: true }
+              ]
+            },
+            { id: "rule_delete_existing", name: "Delete Detection Rule", endpoint: "/api/tools/rule_delete", group: "Detection Rules",
+              params: [
+                { name: "rule_id_to_delete", label: "Rule ID", type: "text", required: true },
+                { name: "force_delete_rule", label: "Force Delete (if retrohunts exist)?", type: "checkbox", optional: true }
+              ]
+            },
+            { id: "rule_validate_syntax", name: "Validate Rule Syntax", endpoint: "/api/tools/rule_validate", group: "Detection Rules",
+              params: [ { name: "rule_content_to_validate", label: "Rule Text (YARA-L)", type: "textarea", rows:10, required: true } ]
+            },
+            { id: "rule_search_by_regex", name: "Search Rules (Regex)", endpoint: "/api/tools/rule_search", group: "Detection Rules",
+              params: [ { name: "regex_pattern_for_rules", label: "Regex Pattern", type: "text", placeholder: "suspicious process.*T1055", required: true } ]
+            },
+            { id: "rule_create_retrohunt", name: "Create Retrohunt", endpoint: "/api/tools/rule_create_retrohunt", group: "Detection Rules",
+              params: [ { name: "rule_id_for_retrohunt", label: "Rule ID", type: "text", required: true } ],
+              time_params: true
+            },
+             { id: "rule_get_retrohunt_status", name: "Get Retrohunt Status", endpoint: "/api/tools/rule_get_retrohunt", group: "Detection Rules",
+              params: [
+                { name: "rule_id_of_retrohunt", label: "Rule ID of Retrohunt", type: "text", required: true },
+                { name: "retrohunt_operation_id", label: "Retrohunt Operation ID", type: "text", required: true }
+              ]
+            },
+            { id: "rule_list_detections", name: "List Rule Detections", endpoint: "/api/tools/rule_list_detections", group: "Detection Rules",
+              params: [
+                { name: "rule_id_for_detections", label: "Rule ID or Versioned ID", type: "text", placeholder: "ru_xxxx or ru_xxxx@v_123_456 or ru_xxxx@- (all versions)", required: true },
+                { name: "alert_state_filter", label: "Alert State Filter", type: "select", optional: true, options: [
+                    {value: "", text: "Any"}, {value:"UNSPECIFIED", text:"Unspecified"}, {value:"NOT_ALERTING", text:"Not Alerting"}, {value:"ALERTING", text:"Alerting"}
+                ]},
+                { name: "page_size_detections", label: "Page Size", type: "number", optional: true },
+                { name: "page_token_detections", label: "Page Token", type: "text", optional: true },
+              ]
+            },
+            { id: "rule_list_errors", name: "List Rule Errors", endpoint: "/api/tools/rule_list_errors", group: "Detection Rules",
+              params: [
+                { name: "rule_id_for_errors", label: "Rule ID or Versioned ID", type: "text", placeholder: "ru_xxxx or ru_xxxx@v_123_456 or ru_xxxx@- (all versions)", required: true }
+              ]
+            },
+            { id: "rule_search_alerts", name: "Search Rule Alerts", endpoint: "/api/tools/rule_search_alerts", group: "Detection Rules",
+              params: [
+                { name: "page_size_rule_alerts", label: "Page Size", type: "number", optional: true, default: 10 }
+              ],
+              time_params: true
+            },
+            { id: "rule_set_batch_update", name: "Batch Update Curated Rule Set Deployments", endpoint: "/api/tools/rule_set_batch_update", group: "Detection Rules",
+              params: [
+                { name: "deployments_json", label: "Deployments (JSON Array)", type: "textarea", rows: 5, required: true, placeholder: '[{"category_id": "uuid", "rule_set_id": "uuid", "precision": "broad", "enabled": true, "alerting": false}]' }
+              ]
+            }
+        ],
+        "Alerts & Cases": [
+            { id: "alerts_get_list", name: "Get Alerts List", endpoint: "/api/tools/alert_get", group: "Alerts & Cases",
+              params: [
+                { name: "snapshot_query_alerts", label: "Snapshot Query", type: "text", placeholder: 'feedback_summary.status != "CLOSED"', optional: true, default: 'feedback_summary.status != "CLOSED"' },
+                { name: "baseline_query_alerts", label: "Baseline Query", type: "text", optional: true },
+                { name: "max_alerts_to_return", label: "Max Alerts", type: "number", default: 50, optional: true, min:1 },
+              ],
+              time_params: true
+            },
+            { id: "alert_get_single_details", name: "Get Single Alert Details", endpoint: "/api/tools/alert_get_single", group: "Alerts & Cases",
+              params: [
+                  { name: "alert_id_to_get", label: "Alert ID", type: "text", required: true },
+                  { name: "include_detections_in_alert", label: "Include Detections?", type: "checkbox", optional: true }
+              ]
+            },
+            { id: "alert_update_single", name: "Update Single Alert", endpoint: "/api/tools/alert_update_single", group: "Alerts & Cases",
+              params: [
+                  { name: "alert_id_to_update", label: "Alert ID", type: "text", required: true },
+                  { name: "confidence_score", label: "Confidence Score (0-100)", type: "number", min:0, max:100, optional: true },
+                  { name: "reason_for_closing", label: "Reason for Closing", type: "select", optional: true, options: [
+                      {value:"", text:"N/A"}, {value:"REASON_UNSPECIFIED", text:"Unspecified"}, {value:"REASON_NOT_MALICIOUS", text:"Not Malicious"},
+                      {value:"REASON_MALICIOUS", text:"Malicious"}, {value:"REASON_MAINTENANCE", text:"Maintenance"}
+                  ]},
+                  { name: "reputation", label: "Reputation", type: "select", optional: true, options: [
+                      {value:"", text:"N/A"},{value:"REPUTATION_UNSPECIFIED", text:"Unspecified"}, {value:"USEFUL", text:"Useful"}, {value:"NOT_USEFUL", text:"Not Useful"}
+                  ]},
+                  { name: "priority_level", label: "Priority", type: "select", optional: true, options: [
+                      {value:"", text:"N/A"},{value:"PRIORITY_UNSPECIFIED", text:"Unspecified"}, {value:"PRIORITY_INFO", text:"Info"}, {value:"PRIORITY_LOW", text:"Low"},
+                      {value:"PRIORITY_MEDIUM", text:"Medium"}, {value:"PRIORITY_HIGH", text:"High"}, {value:"PRIORITY_CRITICAL", text:"Critical"}
+                  ]},
+                  { name: "status_of_alert", label: "Status", type: "select", optional: true, options: [
+                      {value:"", text:"N/A"},{value:"STATUS_UNSPECIFIED", text:"Unspecified"}, {value:"NEW", text:"New"}, {value:"REVIEWED", text:"Reviewed"},
+                      {value:"CLOSED", text:"Closed"}, {value:"OPEN", text:"Open"}
+                  ]},
+                  { name: "verdict_on_alert", label: "Verdict", type: "select", optional: true, options: [
+                      {value:"", text:"N/A"},{value:"VERDICT_UNSPECIFIED", text:"Unspecified"}, {value:"TRUE_POSITIVE", text:"True Positive"}, {value:"FALSE_POSITIVE", text:"False Positive"}
+                  ]},
+                  { name: "risk_score", label: "Risk Score (0-100)", type: "number", min:0, max:100, optional: true },
+                  { name: "disregarded_alert", label: "Disregard Alert?", type: "checkbox", optional: true, three_state: true }, // Needs special handling for None/True/False
+                  { name: "severity_score", label: "Severity (0-100)", type: "number", min:0, max:100, optional: true },
+                  { name: "comment_text", label: "Comment", type: "textarea", rows:2, optional: true, placeholder: "Empty string to clear" },
+                  { name: "root_cause_text", label: "Root Cause", type: "textarea", rows:2, optional: true, placeholder: "Empty string to clear" },
+              ]
+            },
+            { id: "case_get_multiple_details", name: "Get Multiple Case Details", endpoint: "/api/tools/case_get_details", group: "Alerts & Cases",
+              params: [
+                { name: "case_ids_list", label: "Case IDs (comma-separated, max 1000)", type: "text", required: true, placeholder:"case-123,case-456" }
+              ]
+            }
+        ],
+        "Data Export Management": [
+            { id: "export_list_log_types", name: "List Exportable Log Types", endpoint: "/api/tools/export_list_log_types", group: "Data Export Management",
+              params: [ { name: "export_page_size", label: "Page Size", type: "number", default: 50, optional: true, min:1 } ],
+              time_params: true
+            },
+            { id: "export_create_job", name: "Create Data Export Job", endpoint: "/api/tools/export_create", group: "Data Export Management",
+              params: [
+                { name: "gcs_bucket_path", label: "GCS Bucket Path", type: "text", placeholder: "projects/YOUR_PROJ_ID/buckets/YOUR_BUCKET_NAME", required: true },
+                { name: "export_type", label: "Export Type", type: "select", options: [{value: "specific", text:"Specific Log Type"}, {value:"all", text:"All Log Types"}], default: "specific", required: true },
+                { name: "log_type_for_export", label: "Log Type to Export", type: "text", optional: true, show_if: "export_type=specific", required_if_shown: true },
+                // export_all_logs is implicit via select now
+              ],
+              time_params: true
+            },
+            { id: "export_get_status", name: "Get Export Job Status", endpoint: "/api/tools/export_status", group: "Data Export Management",
+              params: [ { name: "export_job_id", label: "Export Job ID", type: "text", required: true } ]
+            },
+            { id: "export_cancel_job", name: "Cancel Export Job", endpoint: "/api/tools/export_cancel", group: "Data Export Management",
+              params: [ { name: "export_job_id_to_cancel", label: "Export Job ID", type: "text", required: true } ]
+            }
+        ],
+        "Gemini AI": [
+            { id: "gemini_ai_query", name: "Query Gemini AI", endpoint: "/api/tools/gemini_query", group: "Gemini AI",
+              params: [
+                { name: "gemini_query_text", label: "Query for Gemini", type: "textarea", rows: 3, required: true, placeholder: "What is Windows event ID 4625?" },
+                { name: "conversation_id", label: "Conversation ID (optional)", type: "text", optional: true, placeholder:"Continue existing conversation" },
+                { name: "output_raw_gemini", label: "Output Raw API Response?", type: "checkbox", optional: true },
+              ]
+            },
+            { id: "gemini_explicit_opt_in", name: "Explicitly Opt-in to Gemini", endpoint: "/api/tools/gemini_opt_in", group: "Gemini AI", params: [], output_type: "message" }
+        ]
+    };
+
+    const toolUiContainer = document.getElementById('toolUiContainer');
+    const currentToolTitle = document.getElementById('currentToolTitle');
+    const outputContent = document.getElementById('outputContent');
+    const clearOutputBtn = document.getElementById('clearOutputBtn');
+    
+    const envModal = document.getElementById('envModal');
+    const manageEnvsBtn = document.getElementById('manageEnvsBtn');
+    const saveEnvBtn = document.getElementById('saveEnvBtn');
+    const cancelEnvBtn = document.getElementById('cancelEnvBtn');
+    const envForm = document.getElementById('envForm');
+    const envFormTitle = document.getElementById('envFormTitle');
+    const envEditIndexInput = document.getElementById('envEditIndex');
+    const envNameInput = document.getElementById('envNameInput');
+    const envCustomerIdInput = document.getElementById('envCustomerIdInput');
+    const envProjectIdInput = document.getElementById('envProjectIdInput');
+    const envRegionInput = document.getElementById('envRegionInput');
+    const environmentsListDiv = document.getElementById('environmentsList');
+    const envModalListDiv = document.getElementById('envModalList');
+    const selectedEnvNameSpan = document.getElementById('selectedEnvName');
+
+    const historyModal = document.getElementById('historyModal');
+    const historyModalTitle = document.getElementById('historyModalTitle');
+    const historyModalContent = document.getElementById('historyModalContent');
+    const closeHistoryModalBtn = document.getElementById('closeHistoryModalBtn');
+    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+    
+    const notificationToast = document.getElementById('notificationToast');
+    const notificationMessage = document.getElementById('notificationMessage');
+
+    function showNotification(message, type = 'info') {
+        notificationMessage.textContent = message;
+        notificationToast.classList.remove('hidden', 'bg-sky-500', 'bg-green-500', 'bg-red-500', 'opacity-0', 'opacity-100');
+        
+        const baseClasses = "fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-md text-sm z-[100] transition-opacity duration-300";
+        if (type === 'success') notificationToast.className = `${baseClasses} bg-green-500`;
+        else if (type === 'error') notificationToast.className = `${baseClasses} bg-red-500`;
+        else notificationToast.className = `${baseClasses} bg-sky-500`;
+        
+        notificationToast.classList.remove('hidden');
+        requestAnimationFrame(() => { // Ensure display:block is processed
+            notificationToast.classList.add('opacity-100');
+        });
+        
+        setTimeout(() => {
+            notificationToast.classList.remove('opacity-100');
+            notificationToast.classList.add('opacity-0');
+            setTimeout(() => notificationToast.classList.add('hidden'), 300);
+        }, 3000 + (type === 'error' ? 2000 : 0) ); // Longer for errors
+    }
+
+    async function apiRequest(endpoint, method = 'GET', body = null) {
+        try {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin' // Ensure cookies are sent with the request
+            };
+            if (body) options.body = JSON.stringify(body);
+            
+            console.log(`Making API request to ${endpoint}`, method, body ? 'with payload' : 'without payload');
+            const response = await fetch(endpoint, options);
+            
+            if (response.status === 401) {
+                console.error('Authentication error (401) - session expired or unauthorized');
+                showNotification('Session expired or unauthorized. Redirecting to login...', 'error');
+                setTimeout(() => window.location.href = '/login', 2000);
+                return null;
+            }
+            
+            // Try to parse as JSON, but if it's CSV or plain text, handle that.
+            const contentType = response.headers.get("content-type");
+            let responseData;
+            if (contentType && (contentType.includes("text/csv") || contentType.includes("text/plain"))) {
+                responseData = await response.text(); // Get as text
+            } else {
+                 responseData = await response.json(); // Assume JSON for others
+            }
+
+            if (!response.ok) {
+                const errorMsg = (typeof responseData === 'object' && responseData.error) ? responseData.error : responseData;
+                throw new Error(errorMsg || `HTTP error ${response.status}`);
+            }
+            
+            // If this was a tool execution, refresh the history
+            if (endpoint.includes('/api/tools/') && method === 'POST') {
+                console.log('Tool execution completed, refreshing history...');
+                setTimeout(loadHistory, 500); // Refresh history after tool execution
+            }
+            
+            return responseData;
+        } catch (error) {
+            console.error(`API request to ${endpoint} failed:`, error);
+            const errorMsgText = error.message.includes("NetworkError") || error.message.includes("Failed to fetch") ? "Network error. Ensure backend is running." : error.message;
+            showNotification(`Error: ${errorMsgText}`, 'error');
+            return { success: false, error: errorMsgText, is_client_error: true }; // Indicate client-side fetch error
+        }
+    }
+    
+    async function loadEnvironments() {
+        const data = await apiRequest('/api/environments');
+        if (data && Array.isArray(data)) {
+            environments = data;
+            renderEnvironments();
+            if (environments.length > 0 && selectedEnvIndex === -1) {
+                selectEnvironment(0);
+            } else if (selectedEnvIndex >= environments.length) {
+                 selectEnvironment(environments.length > 0 ? 0 : -1);
+            } else {
+                 updateSelectedEnvDisplay();
+            }
+        } else if (data && data.error) {
+            // Error handled by apiRequest
+        } else {
+            environments = []; // Ensure it's an array on failure
+            renderEnvironments();
+            updateSelectedEnvDisplay();
+        }
+    }
+
+    function renderEnvironments() {
+        environmentsListDiv.innerHTML = '';
+        envModalListDiv.innerHTML = '';
+
+        if (environments.length === 0) {
+            const placeholder = '<p class="text-xs text-slate-500">No environments configured.</p>';
+            environmentsListDiv.innerHTML = placeholder;
+            envModalListDiv.innerHTML = placeholder;
+        }
+
+        environments.forEach((env, index) => {
+            const envItem = document.createElement('div');
+            envItem.className = `p-2 rounded-md cursor-pointer hover:bg-slate-700 text-sm flex items-center ${index === selectedEnvIndex ? 'bg-sky-600 text-white font-medium' : 'text-slate-300'}`;
+            envItem.innerHTML = `<span class="env-status-dot env-status-${env.status || 'unknown'}"></span> <span class="flex-1 truncate">${env.name}</span>`;
+            envItem.onclick = () => selectEnvironment(index);
+            environmentsListDiv.appendChild(envItem);
+
+            const modalEnvItem = document.createElement('div');
+            modalEnvItem.className = 'p-3 bg-slate-700 rounded-md flex justify-between items-center';
+            modalEnvItem.innerHTML = `
+                <div>
+                    <span class="env-status-dot env-status-${env.status || 'unknown'}"></span>
+                    <span class="font-medium text-slate-200">${env.name}</span>
+                    <p class="text-xs text-slate-400">Cust ID: ${env.customerId} | Proj ID: ${env.projectId} | Region: ${env.region}</p>
+                </div>
+                <div class="space-x-2">
+                    <button class="edit-env-btn text-sky-400 hover:text-sky-300" data-index="${index}"><i class="fas fa-edit"></i></button>
+                    <button class="delete-env-btn text-rose-500 hover:text-rose-400" data-index="${index}"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+            envModalListDiv.appendChild(modalEnvItem);
+        });
+        
+        document.querySelectorAll('.edit-env-btn').forEach(btn => btn.onclick = () => openEnvFormForEdit(parseInt(btn.dataset.index)));
+        document.querySelectorAll('.delete-env-btn').forEach(btn => btn.onclick = () => deleteEnvironmentConfirm(parseInt(btn.dataset.index)));
+    }
+    
+    function updateSelectedEnvDisplay() {
+        if (selectedEnvIndex !== -1 && environments[selectedEnvIndex]) {
+            selectedEnvNameSpan.textContent = environments[selectedEnvIndex].name;
+        } else {
+            selectedEnvNameSpan.textContent = "None";
+        }
+    }
+
+    function selectEnvironment(index) {
+        selectedEnvIndex = index;
+        renderEnvironments(); 
+        updateSelectedEnvDisplay();
+        if (environments[index]) { // Check if environment exists at index
+            showNotification(`Switched to environment: ${environments[index].name}`, 'info');
+        }
+    }
+
+    function openEnvFormForEdit(index) {
+        const env = environments[index];
+        envFormTitle.textContent = "Edit Environment";
+        envEditIndexInput.value = index;
+        envNameInput.value = env.name;
+        envCustomerIdInput.value = env.customerId;
+        envProjectIdInput.value = env.projectId;
+        envRegionInput.value = env.region;
+    }
+
+    manageEnvsBtn.onclick = () => {
+        envForm.reset();
+        envFormTitle.textContent = "Add New Environment";
+        envRegionInput.value = "us"; // Default region
+        envEditIndexInput.value = "-1";
+        renderEnvironments(); 
+        envModal.classList.remove('hidden');
+    };
+    cancelEnvBtn.onclick = () => envModal.classList.add('hidden');
+
+    saveEnvBtn.onclick = async () => {
+        if (!envForm.checkValidity()) {
+            envForm.reportValidity();
+            return;
+        }
+        const name = envNameInput.value.trim();
+        const customerId = envCustomerIdInput.value.trim();
+        const projectId = envProjectIdInput.value.trim();
+        const region = envRegionInput.value.trim();
+        const editIndex = parseInt(envEditIndexInput.value);
+
+        const payload = { name, customerId, projectId, region };
+        let success = false;
+        let result;
+
+        if (editIndex > -1) {
+            result = await apiRequest(`/api/environments/${editIndex}`, 'PUT', payload);
+        } else {
+            result = await apiRequest('/api/environments', 'POST', payload);
+        }
+        
+        if (result && !result.is_client_error && !result.error) { // Check for successful API call and no application error
+            success = true;
+        }
+
+
+        if (success) {
+            await loadEnvironments();
+            envModal.classList.add('hidden');
+            envForm.reset();
+             envRegionInput.value = "us";
+            showNotification(`Environment ${editIndex > -1 ? 'updated' : 'saved'} successfully.`, 'success');
+        } else if (result && result.error) {
+            showNotification(`Error: ${result.error}`, 'error');
+        }
+    };
+
+    async function deleteEnvironmentConfirm(index) {
+        if (confirm(`Are you sure you want to delete environment: ${environments[index].name}?`)) {
+            const result = await apiRequest(`/api/environments/${index}`, 'DELETE');
+            if (result && !result.is_client_error && !result.error) {
+                if (selectedEnvIndex === index) {
+                    selectEnvironment(environments.length > 1 ? 0 : -1); 
+                } else if (selectedEnvIndex > index) {
+                    selectedEnvIndex--; 
+                }
+                await loadEnvironments(); 
+                showNotification('Environment deleted.', 'info');
+            } else if (result && result.error) {
+                showNotification(`Error deleting: ${result.error}`, 'error');
+            }
+        }
+    }
+    
+    function updateEnvironmentStatus(envIndex, status) {
+        if (envIndex >= 0 && envIndex < environments.length) {
+            environments[envIndex].status = status;
+            renderEnvironments(); 
+        }
+    }
+
+    function populateToolMenu() {
+        toolMenu.innerHTML = ''; 
+        Object.entries(toolDefinitions).forEach(([groupName, tools]) => {
+            const groupDiv = document.createElement('div');
+            groupDiv.innerHTML = `<h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">${groupName}</h3>`;
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-1';
+            tools.forEach(tool => {
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="#" data-toolid="${tool.id}" class="tool-menu-item group flex items-center px-2 py-1.5 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 hover:text-slate-100">
+                                  <i class="fas fa-chevron-right mr-2 text-slate-500 group-hover:text-slate-400 text-xs"></i>
+                                  ${tool.name}
+                               </a>`;
+                ul.appendChild(li);
+            });
+            groupDiv.appendChild(ul);
+            toolMenu.appendChild(groupDiv);
+        });
+
+        document.querySelectorAll('.tool-menu-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const toolId = e.currentTarget.dataset.toolid;
+                loadToolUI(toolId);
+            });
+        });
+    }
+
+    function createFormField(toolId, param) {
+        const paramDiv = document.createElement('div');
+        paramDiv.className = 'form-group';
+        if (param.show_if) { 
+            paramDiv.dataset.conditionField = param.show_if.split('=')[0];
+            paramDiv.dataset.conditionValue = param.show_if.split('=')[1];
+            paramDiv.classList.add('hidden'); 
+        }
+
+        const label = document.createElement('label');
+        label.htmlFor = `${toolId}_${param.name}`;
+        label.className = 'block mb-2 text-sm font-medium text-sky-300';
+        if (param.required || param.required_if_shown) label.classList.add('required-label');
+        label.textContent = param.label + (param.optional && !param.required && !param.required_if_shown ? ' (Optional)' : '');
+        paramDiv.appendChild(label);
+
+        // Get appropriate icon based on field type or name
+        const getIconClass = (param) => {
+            const nameHints = {
+                'query': 'fa-search',
+                'rule': 'fa-shield-alt',
+                'log': 'fa-file-alt',
+                'alert': 'fa-bell',
+                'id': 'fa-fingerprint',
+                'name': 'fa-tag',
+                'time': 'fa-clock',
+                'max': 'fa-sort-numeric-up',
+                'export': 'fa-file-export',
+                'file': 'fa-file',
+                'text': 'fa-font',
+                'email': 'fa-envelope'
+            };
+
+            // Check for keyword matches in the param name
+            for (const [keyword, icon] of Object.entries(nameHints)) {
+                if (param.name.toLowerCase().includes(keyword.toLowerCase())) {
+                    return icon;
+                }
+            }
+
+            // Default icons based on input type
+            const typeIcons = {
+                'textarea': 'fa-align-left',
+                'select': 'fa-list',
+                'checkbox': 'fa-check-square',
+                'number': 'fa-hashtag',
+                'datetime-local': 'fa-calendar-alt',
+                'text': 'fa-keyboard'
+            };
+
+            return typeIcons[param.type] || 'fa-keyboard';
+        };
+
+        const iconClass = getIconClass(param);
+
+        if (param.type === 'textarea') {
+            const textareaContainer = document.createElement('div');
+            textareaContainer.className = 'relative';
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'absolute left-3 top-3 text-slate-400';
+            iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
+            textareaContainer.appendChild(iconSpan);
+            
+            const textarea = document.createElement('textarea');
+            textarea.id = `${toolId}_${param.name}`;
+            textarea.name = param.name;
+            textarea.className = 'form-textarea pl-10';
+            textarea.rows = param.rows || 3;
+            if (param.placeholder) textarea.placeholder = param.placeholder;
+            if (param.required) textarea.required = true;
+            textareaContainer.appendChild(textarea);
+            
+            paramDiv.appendChild(textareaContainer);
+        } else if (param.type === 'select') {
+            const selectContainer = document.createElement('div');
+            selectContainer.className = 'relative';
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400';
+            iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
+            selectContainer.appendChild(iconSpan);
+            
+            const select = document.createElement('select');
+            select.id = `${toolId}_${param.name}`;
+            select.name = param.name;
+            select.className = 'form-select pl-10';
+            if (param.required) select.required = true;
+            param.options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                if (opt.value === param.default) option.selected = true;
+                select.appendChild(option);
+            });
+            selectContainer.appendChild(select);
+            
+            paramDiv.appendChild(selectContainer);
+        } else if (param.type === 'checkbox') {
+            const checkboxDiv = document.createElement('div');
+            checkboxDiv.className = 'flex items-center mt-3 p-3 bg-slate-700/50 rounded-lg';
+            const checkbox = document.createElement('input');
+            checkbox.id = `${toolId}_${param.name}`;
+            checkbox.name = param.name;
+            checkbox.type = 'checkbox';
+            checkbox.className = 'form-checkbox mr-3';
+            if (param.checked) checkbox.checked = true;
+             if (param.three_state) {
+                checkbox.dataset.threeState = "true";
+                checkbox.checked = false;
+                const stateIndicator = document.createElement('span');
+                stateIndicator.id = `${toolId}_${param.name}_indicator`;
+                stateIndicator.className = 'text-sm text-slate-300 ml-2';
+                stateIndicator.textContent = '(Not Set)';
+                checkbox.onchange = () => {
+                    stateIndicator.textContent = checkbox.checked ? '(Set to True)' : '(Set to False if submitted like this, or Not Set if field is ignored)';
+                };
+                checkboxDiv.appendChild(stateIndicator);
+            }
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'text-sky-400 mr-2';
+            iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
+            
+            const checkboxLabel = document.createElement('label');
+            checkboxLabel.htmlFor = `${toolId}_${param.name}`;
+            checkboxLabel.className = 'text-base text-slate-200';
+            checkboxLabel.textContent = param.label.replace(/\s*\([\s\S]*?\)|(\?)/g, '');
+            
+            checkboxDiv.insertBefore(checkbox, checkboxDiv.firstChild);
+            checkboxDiv.insertBefore(iconSpan, checkboxDiv.firstChild);
+            checkboxDiv.appendChild(checkboxLabel);
+            paramDiv.appendChild(checkboxDiv);
+        } else { 
+            const inputContainer = document.createElement('div');
+            inputContainer.className = 'relative';
+            
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400';
+            iconSpan.innerHTML = `<i class="fas ${iconClass}"></i>`;
+            inputContainer.appendChild(iconSpan);
+            
+            const input = document.createElement('input');
+            input.id = `${toolId}_${param.name}`;
+            input.name = param.name;
+            input.type = param.type || 'text';
+            input.className = 'form-input pl-10';
+            if (param.placeholder) input.placeholder = param.placeholder;
+            if (param.default !== undefined) input.value = param.default;
+            if (param.required) input.required = true;
+            if (param.min !== undefined) input.min = param.min;
+            if (param.max !== undefined) input.max = param.max;
+            inputContainer.appendChild(input);
+            
+            paramDiv.appendChild(inputContainer);
+        }
+        if (param.note) {
+            const noteP = document.createElement('p');
+            noteP.className = 'text-sm text-slate-400 mt-2 italic';
+            noteP.innerHTML = `<i class="fas fa-info-circle mr-1"></i> ${param.note}`;
+            paramDiv.appendChild(noteP);
+        }
+        return paramDiv;
+    }
+
+
+    function loadToolUI(toolId) {
+        let selectedTool = null;
+        for (const group in toolDefinitions) {
+            selectedTool = toolDefinitions[group].find(t => t.id === toolId);
+            if (selectedTool) break;
+        }
+
+        if (!selectedTool) {
+            toolUiContainer.innerHTML = '<p class="text-rose-400">Error: Tool definition not found.</p>';
+            currentToolTitle.textContent = "Error";
+            return;
+        }
+
+        currentToolTitle.textContent = selectedTool.name;
+        toolUiContainer.innerHTML = ''; 
+
+        const formWrapper = document.createElement('div');
+        formWrapper.className = 'bg-gradient-to-br from-slate-800 to-slate-850 p-1 rounded-xl shadow-lg w-full';
+        
+        const form = document.createElement('form');
+        form.id = `${toolId}-form`;
+        form.className = 'space-y-6 p-6 rounded-xl bg-slate-800/90 backdrop-blur-sm w-full';
+        form.onsubmit = (e) => { e.preventDefault(); handleSubmit(selectedTool); };
+
+        if (selectedTool.time_params) {
+            const timeGroup = document.createElement('fieldset');
+            timeGroup.className = 'param-group w-full';
+            timeGroup.innerHTML = '<legend class="param-group-title"><i class="fas fa-clock mr-2"></i>Time Range</legend>';
+            
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-8 w-full';
+
+            grid.innerHTML += `
+                <div class="form-group">
+                    <label for="${toolId}_start_time" class="block mb-2 text-sm font-medium text-sky-300">Start Time (Local)</label>
+                    <div class="relative w-full">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <i class="fas fa-calendar-alt"></i>
+                        </span>
+                        <input type="datetime-local" id="${toolId}_start_time" name="start_time" class="form-input pl-10">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="${toolId}_end_time" class="block mb-2 text-sm font-medium text-sky-300">End Time (Local)</label>
+                    <div class="relative w-full">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <i class="fas fa-calendar-alt"></i>
+                        </span>
+                        <input type="datetime-local" id="${toolId}_end_time" name="end_time" class="form-input pl-10">
+                    </div>
+                </div>
+            `;
+            timeGroup.appendChild(grid);
+            
+            const orDiv = document.createElement('div');
+            orDiv.className = 'text-center text-sm text-slate-300 my-4 font-medium';
+            orDiv.innerHTML = '<span class="bg-slate-700 px-3 py-1 rounded-full">OR</span>';
+            timeGroup.appendChild(orDiv);
+
+            const windowGrid = document.createElement('div');
+            windowGrid.className = 'grid grid-cols-2 gap-8 items-end w-full';
+            windowGrid.innerHTML += `
+                <div class="form-group">
+                    <label for="${toolId}_time_window_value" class="block mb-2 text-sm font-medium text-sky-300">Last</label>
+                    <div class="relative w-full">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <i class="fas fa-hourglass-half"></i>
+                        </span>
+                        <input type="number" id="${toolId}_time_window_value" name="time_window_value" class="form-input pl-10" value="24" placeholder="24">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <select id="${toolId}_time_window_unit" name="time_window_unit" class="form-select">
+                        <option value="minutes">Minutes</option>
+                        <option value="hours" selected>Hours</option>
+                        <option value="days">Days</option>
+                    </select>
+                </div>
+            `;
+            timeGroup.appendChild(windowGrid);
+            form.appendChild(timeGroup);
+        }
+
+        selectedTool.params.forEach(param => {
+            form.appendChild(createFormField(toolId, param));
+        });
+        
+        const buttonDiv = document.createElement('div');
+        buttonDiv.className = 'flex items-center justify-between mt-8 w-full';
+        
+        const historyButton = document.createElement('button');
+        historyButton.type = 'button';
+        historyButton.id = `${toolId}-history-btn`;
+        historyButton.className = 'btn btn-secondary';
+        historyButton.innerHTML = '<i class="fas fa-history mr-2"></i> History';
+        historyButton.onclick = () => showHistoryForTool(toolId, selectedTool.name);
+        buttonDiv.appendChild(historyButton);
+
+        const submitButton = document.createElement('button');
+        submitButton.type = 'submit';
+        submitButton.id = `${toolId}-submit`;
+        submitButton.className = 'btn btn-primary';
+        submitButton.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Execute';
+        buttonDiv.appendChild(submitButton);
+        
+        form.appendChild(buttonDiv);
+        formWrapper.appendChild(form);
+        toolUiContainer.appendChild(formWrapper);
+        
+        setupConditionalFields(form, toolId);
+    }
+
+    function setupConditionalFields(form, toolId) {
+        form.querySelectorAll('input[type="checkbox"], select').forEach(controller => {
+            controller.addEventListener('change', () => {
+                const dependentFields = form.querySelectorAll(`[data-condition-field="${controller.name}"]`);
+                dependentFields.forEach(depField => {
+                    let conditionMet = false;
+                    if (controller.type === 'checkbox') {
+                        conditionMet = controller.checked.toString() === depField.dataset.conditionValue;
+                    } else if (controller.type === 'select-one') {
+                        conditionMet = controller.value === depField.dataset.conditionValue;
+                    }
+                    depField.classList.toggle('hidden', !conditionMet);
+                    // if conditionMet and field has required_if_shown, set required
+                    const inputInside = depField.querySelector('input, textarea, select');
+                    if (inputInside && inputInside.closest('[data-condition-field]') === depField ) { // ensure it's the direct input
+                         const toolDef = findToolDefinition(toolId);
+                         if (toolDef) {
+                             const paramDef = toolDef.params.find(p => p.name === inputInside.name);
+                             if (paramDef && paramDef.required_if_shown) {
+                                inputInside.required = conditionMet;
+                             }
+                         }
+                    }
+                });
+            });
+            // Trigger initial check
+            if (controller.type === 'select-one' || controller.type === 'checkbox') {
+                 controller.dispatchEvent(new Event('change'));
+            }
+        });
+    }
+    
+    function findToolDefinition(toolId) {
+         for (const group in toolDefinitions) {
+            const tool = toolDefinitions[group].find(t => t.id === toolId);
+            if (tool) return tool;
+        }
+        return null;
+    }
+
+
+    async function handleSubmit(tool) {
+        if (selectedEnvIndex === -1 && tool.endpoint !== "/api/tools/gemini_opt_in_explicit") { // Opt-in doesn't need an env always
+            showNotification("Please select an environment first.", "error");
+            return;
+        }
+
+        const form = document.getElementById(`${tool.id}-form`);
+        if (!form.checkValidity()) {
+            form.reportValidity(); // Show native HTML5 validation messages
+            // Also highlight invalid fields for better UX
+            for (let i = 0; i < form.elements.length; i++) {
+                const element = form.elements[i];
+                if (!element.checkValidity() && (element.required || (element.closest('[data-condition-field]') && !element.closest('[data-condition-field]').classList.contains('hidden') && element.required_if_shown ) )) {
+                    element.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                     // Find label and add error class
+                    const label = form.querySelector(`label[for='${element.id}']`);
+                    if (label) label.classList.add('text-red-400');
+                } else {
+                    element.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
+                    const label = form.querySelector(`label[for='${element.id}']`);
+                    if (label) label.classList.remove('text-red-400');
+                }
+            }
+            return;
+        }
+
+
+        const formData = new FormData(form);
+        const params = { environmentIndex: selectedEnvIndex }; // Always send environment index
+        
+        // Process FormData into params object
+        for (const [key, value] of formData.entries()) {
+             const element = form.elements[key];
+            if (element && element.type === 'checkbox') {
+                 if (element.dataset.threeState === "true") { // Handling for "disregarded"
+                    // Only send if it's meant to be True or False, not "None"
+                    params[key] = element.checked;
+                } else {
+                    params[key] = element.checked;
+                }
+            } else if (element && element.type === 'datetime-local' && value) {
+                // Convert local datetime to ISO UTC string
+                try {
+                    const localDate = new Date(value);
+                    params[key] = localDate.toISOString(); // Send as UTC ISO
+                } catch (e) {
+                    console.warn(`Invalid date for ${key}: ${value}`);
+                    params[key] = value; // Send as is if parsing fails
+                }
+            }
+            else {
+                params[key] = value;
+            }
+        }
+        
+        // Special handling for log_message_content for log_ingest_raw
+        if (tool.id === 'log_ingest_raw' && params['log_message_content']) {
+            // Try to parse as JSON array, if fails, treat as single string.
+            // This allows pasting a JSON array of log strings.
+            try {
+                const parsedLogs = JSON.parse(params['log_message_content']);
+                if (Array.isArray(parsedLogs) && parsedLogs.every(item => typeof item === 'string')) {
+                    params['log_message'] = parsedLogs; // Send as array
+                } else {
+                    params['log_message'] = params['log_message_content']; // Send as single string
+                }
+            } catch (e) {
+                 params['log_message'] = params['log_message_content']; // Treat as single string if JSON parse fails
+            }
+            delete params['log_message_content']; // Remove original field
+        }
+         // Special handling for JSON textareas (e.g. UDM events, labels, deployments)
+        const jsonTextareaParams = {
+            'log_ingest_udm_events': 'udm_events_json',
+            'rule_set_batch_update': 'deployments_json',
+        };
+        if (tool.id === 'log_ingest_raw' && params['labels_input']) { // Specific for labels
+            try {
+                // Try JSON first
+                params['labels'] = JSON.parse(params['labels_input']);
+            } catch (e) {
+                // Try k=v,k=v
+                const labelsObj = {};
+                params['labels_input'].split(',').forEach(pair => {
+                    const [k,v] = pair.split('=');
+                    if (k && v) labelsObj[k.trim()] = v.trim();
+                });
+                if (Object.keys(labelsObj).length > 0) {
+                    params['labels'] = labelsObj;
+                } else {
+                    showNotification('Invalid format for Labels. Use JSON or comma-separated key=value pairs.', 'error');
+                    return;
+                }
+            }
+            delete params['labels_input'];
+        } else if (jsonTextareaParams[tool.id] && params[jsonTextareaParams[tool.id]]) {
+            const fieldName = jsonTextareaParams[tool.id];
+            try {
+                // The backend expects the already parsed object/array for these
+                params[tool.params.find(p => p.name === fieldName).name_for_backend || fieldName.replace('_json','')] = JSON.parse(params[fieldName]);
+                delete params[fieldName];
+            } catch (e) {
+                showNotification(`Invalid JSON format for ${tool.params.find(p => p.name === fieldName).label}.`, 'error');
+                return;
+            }
+        }
+
+
+        outputContent.textContent = 'Executing...';
+        document.getElementById('jsonOutputWrapper').classList.add('hidden');
+        document.getElementById('outputContent').classList.remove('hidden');
+        document.getElementById('copyOutputBtn').classList.add('hidden');
+        document.getElementById('toggleViewBtn').classList.add('hidden');
+        document.getElementById('expandAllBtn').classList.add('hidden');
+        document.getElementById('collapseAllBtn').classList.add('hidden');
+        const submitButton = form.querySelector('button[type="submit"]');
+        if(submitButton) submitButton.disabled = true;
+
+        const result = await apiRequest(tool.endpoint, 'POST', params);
+        
+        if(submitButton) submitButton.disabled = false;
+
+        if (result) {
+             if (result.is_client_error) { // Handled by apiRequest's notification
+                outputContent.textContent = `Client-side request error: ${result.error}`;
+                return;
+            }
+            if (result.success) {
+                if (tool.output_type === "json_or_csv" && typeof result.data === 'string' && (result.data.includes(',') || result.data.includes('\n'))) { // Heuristic for CSV
+                    outputContent.textContent = result.data; // Display CSV as plain text
+                    document.getElementById('jsonOutputWrapper').classList.add('hidden');
+                    document.getElementById('outputContent').classList.remove('hidden');
+                } else if (tool.output_type === "message" && result.data && result.data.message) {
+                    outputContent.textContent = result.data.message;
+                    document.getElementById('jsonOutputWrapper').classList.add('hidden');
+                    document.getElementById('outputContent').classList.remove('hidden');
+                } else {
+                    // Check if result.data is an object and use the JSON viewer
+                    if (typeof result.data === 'object' && result.data !== null) {
+                        displayJsonViewer(result.data);
+                    } else {
+                        try {
+                            // Try to parse as JSON if it's a string
+                            const jsonData = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+                            displayJsonViewer(jsonData);
+                        } catch (e) {
+                            // Fallback to text display if parsing fails
+                            outputContent.textContent = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
+                            document.getElementById('jsonOutputWrapper').classList.add('hidden');
+                            document.getElementById('outputContent').classList.remove('hidden');
+                        }
+                    }
+                }
+                showNotification(`${tool.name} executed successfully.`, 'success');
+                if (tool.endpoint !== "/api/tools/gemini_opt_in_explicit") {
+                    updateEnvironmentStatus(selectedEnvIndex, result.env_status || 'ok');
+                }
+                // Manually refresh history immediately after successful execution
+                loadHistory();
+            } else {
+                outputContent.textContent = `Error: ${result.error}`;
+                document.getElementById('jsonOutputWrapper').classList.add('hidden');
+                document.getElementById('outputContent').classList.remove('hidden');
+                showNotification(`${tool.name} failed: ${result.error}`, 'error');
+                 if (tool.endpoint !== "/api/tools/gemini_opt_in_explicit") {
+                    updateEnvironmentStatus(selectedEnvIndex, result.env_status || 'error');
+                }
+                if (result.gemini_opt_in_required) {
+                    outputContent.textContent += "\n\nPlease use the 'Opt-in to Gemini' tool or enable Gemini in your Chronicle settings.";
+                }
+            }
+             if (result.env_status === 'auth_error') { 
+                setTimeout(() => window.location.href = '/login', 2000);
+            }
+        } else { // Should be caught by apiRequest if it returns null
+            outputContent.textContent = 'Request failed. Check console for details.';
+            document.getElementById('jsonOutputWrapper').classList.add('hidden');
+            document.getElementById('outputContent').classList.remove('hidden');
+        }
+    }
+    
+    function displayJsonViewer(data) {
+        // Hide plain text output and show JSON viewer
+        document.getElementById('outputContent').classList.add('hidden');
+        document.getElementById('jsonOutputWrapper').classList.remove('hidden');
+        document.getElementById('copyOutputBtn').classList.remove('hidden');
+        document.getElementById('toggleViewBtn').classList.remove('hidden');
+        document.getElementById('expandAllBtn').classList.remove('hidden');
+        document.getElementById('collapseAllBtn').classList.remove('hidden');
+        
+        const container = document.getElementById('jsonOutput');
+        container.innerHTML = ''; // Clear previous content
+        
+        // Destroy previous instance if it exists
+        if (jsonEditor) {
+            jsonEditor.destroy();
+        }
+        
+        // Initialize the editor with options
+        const options = {
+            mode: 'tree',
+            modes: ['tree', 'view', 'form', 'code', 'text'],
+            sortObjectKeys: false,
+            navigationBar: true,
+            statusBar: true,
+            mainMenuBar: true,
+            search: true,
+            enableSort: true,
+            enableTransform: true
+        };
+        
+        try {
+            // Create the editor
+            jsonEditor = new JSONEditor(container, options, data);
+            
+            // Setup event handlers for the buttons
+            document.getElementById('copyOutputBtn').onclick = () => {
+                const json = jsonEditor.get();
+                navigator.clipboard.writeText(JSON.stringify(json, null, 2)).then(() => {
+                    showNotification('JSON copied to clipboard', 'success');
+                }).catch(err => {
+                    showNotification('Failed to copy: ' + err, 'error');
+                });
+            };
+            
+            document.getElementById('toggleViewBtn').onclick = () => {
+                const currentMode = jsonEditor.getMode();
+                const newMode = currentMode === 'tree' ? 'code' : 'tree';
+                jsonEditor.setMode(newMode);
+                document.getElementById('toggleViewBtn').innerHTML = `<i class="fas fa-${newMode === 'tree' ? 'code' : 'tree'}"></i> ${newMode === 'tree' ? 'Text' : 'Tree'} View`;
+            };
+            
+            document.getElementById('expandAllBtn').onclick = () => {
+                try {
+                    if (jsonEditor.getMode() === 'tree') {
+                        jsonEditor.expandAll();
+                    }
+                } catch (e) {
+                    console.error('Error expanding JSON:', e);
+                }
+            };
+            
+            document.getElementById('collapseAllBtn').onclick = () => {
+                try {
+                    if (jsonEditor.getMode() === 'tree') {
+                        jsonEditor.collapseAll();
+                    }
+                } catch (e) {
+                    console.error('Error collapsing JSON:', e);
+                }
+            };
+        } catch (e) {
+            console.error('Error initializing JSONEditor:', e);
+            // Fallback to plain text display
+            outputContent.textContent = JSON.stringify(data, null, 2);
+            document.getElementById('jsonOutputWrapper').classList.add('hidden');
+            document.getElementById('outputContent').classList.remove('hidden');
+            document.getElementById('copyOutputBtn').classList.add('hidden');
+            document.getElementById('toggleViewBtn').classList.add('hidden');
+            document.getElementById('expandAllBtn').classList.add('hidden');
+            document.getElementById('collapseAllBtn').classList.add('hidden');
+        }
+    }
+    
+    clearOutputBtn.onclick = () => {
+        outputContent.textContent = 'No output yet.';
+        document.getElementById('jsonOutputWrapper').classList.add('hidden');
+        document.getElementById('outputContent').classList.remove('hidden');
+        document.getElementById('copyOutputBtn').classList.add('hidden');
+        document.getElementById('toggleViewBtn').classList.add('hidden');
+        document.getElementById('expandAllBtn').classList.add('hidden');
+        document.getElementById('collapseAllBtn').classList.add('hidden');
+        if (jsonEditor) {
+            jsonEditor.destroy();
+            jsonEditor = null;
+        }
+        
+        // Also collapse if expanded
+        if (isOutputExpanded) {
+            toggleOutputExpand();
+        }
+    };
+    
+    // Function to toggle output expansion
+    function toggleOutputExpand() {
+        const outputContainer = document.getElementById('outputContainer');
+        const expandBtn = document.getElementById('expandOutputBtn');
+        
+        if (isOutputExpanded) {
+            // Collapse
+            outputContainer.classList.remove('output-expanded');
+            // Remove overlay
+            document.getElementById('outputOverlay')?.remove();
+            expandBtn.innerHTML = '<i class="fas fa-expand"></i> Expand';
+        } else {
+            // Expand
+            outputContainer.classList.add('output-expanded');
+            // Add overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'outputOverlay';
+            overlay.className = 'overlay';
+            overlay.onclick = toggleOutputExpand; // Click outside to collapse
+            document.body.appendChild(overlay);
+            expandBtn.innerHTML = '<i class="fas fa-compress"></i> Collapse';
+            
+            // Resize JSONEditor if active
+            if (jsonEditor) {
+                setTimeout(() => jsonEditor.resize(), 300);
+            }
+        }
+        
+        isOutputExpanded = !isOutputExpanded;
+    }
+    
+    // Setup expand button handler
+    document.addEventListener('DOMContentLoaded', () => {
+        populateToolMenu();
+        loadEnvironments();
+        loadHistory();
+        
+        // Add event listener for expand button
+        document.getElementById('expandOutputBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleOutputExpand();
+        });
+    });
+
+    async function loadHistory() {
+        console.log('Loading history from server...');
+        const data = await apiRequest('/api/history');
+        if (data && Array.isArray(data)) {
+            executionHistory = data.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+            console.log('History loaded successfully:', executionHistory);
+        } else {
+            console.warn('Failed to load history or empty history:', data);
+            executionHistory = [];
+        }
+    }
+
+    function showHistoryForTool(toolId, toolName) {
+        console.log(`Showing history for tool: ${toolId} (${toolName})`);
+        console.log(`Current execution history:`, executionHistory);
+        
+        historyModalTitle.textContent = `Execution History for: ${toolName}`;
+        
+        // Create a map of tool IDs to their display names for better matching
+        const toolIdToNameMap = {};
+        Object.keys(toolDefinitions).forEach(category => {
+            toolDefinitions[category].forEach(tool => {
+                toolIdToNameMap[tool.id] = tool.name;
+            });
+        });
+        console.log('Tool ID to name mapping:', toolIdToNameMap);
+        
+        // Enhanced filtering logic for tool history with more flexible matching
+        const toolHistory = executionHistory.filter(item => {
+            if (!item.tool) return false; // Skip items with no tool name
+            
+            const itemToolName = item.tool.toLowerCase();
+            const searchToolName = toolName.toLowerCase();
+            const searchToolId = toolId.toLowerCase();
+            
+            // Direct exact matches
+            if (itemToolName === searchToolName) return true;
+            
+            // Check for matches based on the tool ID (strip underscores)
+            const normalizedItemName = itemToolName.replace(/[_\s]/g, '');
+            const normalizedSearchId = searchToolId.replace(/[_\s]/g, '');
+            if (normalizedItemName.includes(normalizedSearchId)) return true;
+            
+            // Match on first part of tool ID (e.g. "gemini" matches "gemini_ai_query")
+            const toolParts = searchToolId.split('_');
+            if (toolParts.length > 0 && itemToolName.includes(toolParts[0])) return true;
+            
+            // Check against all known tool names to handle case where backend uses different naming
+            for (const [id, name] of Object.entries(toolIdToNameMap)) {
+                if (id.startsWith(searchToolId.split('_')[0]) && 
+                    itemToolName.includes(name.toLowerCase())) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }).slice(0, MAX_HISTORY_PER_TOOL * 3); 
+        
+        console.log(`Filtered history for this tool:`, toolHistory);
+
+        historyModalContent.innerHTML = '';
+        if (toolHistory.length === 0) {
+            historyModalContent.innerHTML = '<p class="text-slate-300 text-center py-4">No history for this tool yet.</p>';
+        } else {
+            toolHistory.forEach((item, index) => {
+                try {
+                    const historyItemDiv = document.createElement('div');
+                    historyItemDiv.className = 'history-item p-4 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors border border-slate-600';
+                    
+                    // Handle potential issues with params
+                    let paramsPreview = '';
+                    let safePayload = '';
+                    
+                    try {
+                        paramsPreview = JSON.stringify(item.params, null, 2);
+                        if (paramsPreview.length > 200) paramsPreview = paramsPreview.substring(0,200) + "...";
+                        
+                        // Ensure valid JSON in data attributes by properly escaping
+                        safePayload = JSON.stringify(item.params).replace(/"/g, '&quot;');
+                    } catch (err) {
+                        console.error('Error processing history item params:', err);
+                        paramsPreview = "Error processing parameters";
+                        safePayload = JSON.stringify({});
+                    }
+
+                    const timestamp = item.timestamp ? new Date(item.timestamp).toLocaleString() : 'Unknown time';
+                    
+                    historyItemDiv.innerHTML = `
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-medium text-slate-200 text-base">${item.tool} - ${timestamp}</span>
+                            <button class="text-sky-400 hover:text-sky-300 text-sm load-history-btn px-3 py-1 bg-sky-900/30 rounded-md" 
+                                    data-history-payload="${safePayload}" 
+                                    data-tool-id="${toolId}">
+                                <i class="fas fa-redo mr-1"></i> Load
+                            </button>
+                        </div>
+                        <pre class="text-sm text-white mt-2 whitespace-pre-wrap break-all bg-slate-850 p-3 rounded-md border border-slate-600">${paramsPreview}</pre>
+                    `;
+                    historyModalContent.appendChild(historyItemDiv);
+                } catch (err) {
+                    console.error('Error creating history item:', err);
+                }
+            });
+            
+            // Use a more direct approach to attach click handlers
+            const loadBtns = historyModalContent.querySelectorAll('.load-history-btn');
+            console.log(`Found ${loadBtns.length} history load buttons`);
+            
+            loadBtns.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    console.log('History load button clicked');
+                    try {
+                        const payloadStr = this.getAttribute('data-history-payload');
+                        const historyPayload = JSON.parse(payloadStr);
+                        const originalToolId = this.getAttribute('data-tool-id');
+                        
+                        console.log('Loading history payload:', historyPayload);
+                        console.log('For tool ID:', originalToolId);
+                        
+                        if (historyPayload) {
+                            loadToolUI(originalToolId);
+                            setTimeout(() => {
+                                const form = document.getElementById(`${originalToolId}-form`);
+                                if (form) {
+                                    populateFormWithHistory(form, historyPayload);
+                                    showNotification('Form populated from history.', 'info');
+                                } else {
+                                    showNotification('Could not find form to populate.', 'error');
+                                    console.error(`Form not found: ${originalToolId}-form`);
+                                }
+                                historyModal.classList.add('hidden');
+                                historyModal.style.display = 'none';
+                            }, 100); // Slightly longer timeout to ensure UI is rendered
+                        }
+                    } catch (err) {
+                        console.error('Error loading history:', err);
+                        showNotification('Error loading history data', 'error');
+                    }
+                });
+            });
+        }
+        
+        // Force display of modal - ensure CSS display property is set
+        historyModal.style.display = 'flex';
+        historyModal.classList.remove('hidden');
+        console.log('History modal should now be visible');
+    }
+    
+    closeHistoryModalBtn.onclick = () => {
+        historyModal.classList.add('hidden');
+        historyModal.style.display = 'none';
+        console.log('History modal closed');
+    };
+
+    clearHistoryBtn.onclick = async () => {
+        if (confirm("Are you sure you want to clear all execution history? This cannot be undone.")) {
+            const result = await apiRequest('/api/history', 'DELETE');
+            if (result && !result.is_client_error && result.message) {
+                executionHistory = [];
+                historyModalContent.innerHTML = '<p class="text-slate-400">History cleared.</p>';
+                showNotification('Execution history cleared.', 'info');
+            } else if (result && result.error) {
+                showNotification(`Error clearing history: ${result.error}`, 'error');
+            }
+        }
+    };
+
+    function populateFormWithHistory(form, params) {
+        console.log('Populating form with history data:', params);
+        
+        // Handle each form element
+        for (const key in params) {
+            try {
+                const element = form.elements[key];
+                if (!element) {
+                    console.warn(`Element not found for parameter: ${key}`);
+                    continue;
+                }
+                
+                if (element.type === 'checkbox') {
+                    element.checked = params[key] === true || params[key] === 'true';
+                } else if (element.type === 'datetime-local') {
+                    try {
+                        if (params[key]) {
+                            const dt = new Date(params[key]);
+                            const localIsoString = new Date(dt.getTime() - (dt.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                            element.value = localIsoString;
+                        } else {
+                            element.value = '';
+                        }
+                    } catch (e) {
+                        console.warn(`Could not parse date for ${key}: ${params[key]}`);
+                        element.value = '';
+                    }
+                } else if (typeof params[key] === 'object' && params[key] !== null) {
+                    // Handle objects (e.g. labels)
+                    element.value = JSON.stringify(params[key]);
+                } else {
+                    element.value = params[key];
+                }
+                
+                // Trigger change event for conditional fields
+                const event = new Event('change', { bubbles: true });
+                element.dispatchEvent(event);
+                console.log(`Set value for ${key} to:`, element.type === 'checkbox' ? element.checked : element.value);
+            } catch (err) {
+                console.error(`Error setting value for ${key}:`, err);
+            }
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        populateToolMenu();
+        loadEnvironments();
+        loadHistory();
+    });
+
+</script>
+</body>
+</html>
