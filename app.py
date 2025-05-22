@@ -830,7 +830,12 @@ def tool_rule_search():
     data = request.json
     env_index = data.get('environmentIndex')
     chronicle_client = _get_chronicle_client(env_index)
-    params = {'query': data.get('regex_query')}
+    
+    regex_pattern = data.get('regex_pattern_for_rules')
+    if not regex_pattern:
+        return jsonify({"success": False, "error": "Missing regex pattern parameter", "env_status": "error"}), 400
+    
+    params = {'query': regex_pattern}
     return _handle_sdk_call("Search Rules", chronicle_client.search_rules, params, data)
 
 
