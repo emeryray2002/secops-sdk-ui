@@ -33,7 +33,19 @@ if os.path.exists(".env"):
     load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "supersecretkey")
+
+# Secure secret key handling
+if os.environ.get("FLASK_SECRET_KEY"):
+    app.secret_key = os.environ.get("FLASK_SECRET_KEY")
+elif os.environ.get("FLASK_DEBUG", "False").lower() == "true":
+    # In debug mode, generate a random key for the session
+    app.secret_key = os.urandom(24).hex()
+    app.logger.warning("Generated random secret key for debug mode. DO NOT use in production!")
+else:
+    # In production, require a proper secret key
+    app.logger.error("FLASK_SECRET_KEY environment variable not set. This is required for production!")
+    raise RuntimeError("FLASK_SECRET_KEY environment variable is required for production use")
+
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = not os.environ.get("FLASK_DEBUG", "False").lower() == "true" # True in production
 
@@ -418,27 +430,44 @@ def _handle_sdk_call(tool_name, sdk_function, params, request_data):
     except APIError as e:
         app.logger.error(f"API Error in {tool_name}: {e}")
         # Check for authentication-related errors
-        if "unauthorized" in str(e).lower() or "unauthenticated" in str(e).lower() or "permission" in str(e).lower():
-            return jsonify({"success": False, "error": f"Authentication error: {str(e)}", "env_status": "auth_error"}), 401
-        return jsonify({"success": False, "error": str(e), "env_status": "error"}), 400
+        error_msg = str(e)
+        if "unauthorized" in error_msg.lower() or "unauthenticated" in error_msg.lower() or "permission" in error_msg.lower():
+            return jsonify({"success": False, "error": f"Authentication error: {error_msg}", "env_status": "auth_error"}), 401
+        
+        # Return sanitized error for API errors (these are generally safe to show to users)
+        return jsonify({"success": False, "error": error_msg, "env_status": "error"}), 400
     except SecOpsError as e:
         app.logger.error(f"SecOps Error in {tool_name}: {e}")
-        if "authentication" in str(e).lower() or "credentials" in str(e).lower():
-            return jsonify({"success": False, "error": f"Authentication error: {str(e)}", "env_status": "auth_error"}), 401
-        return jsonify({"success": False, "error": str(e), "env_status": "error"}), 400
+        error_msg = str(e)
+        if "authentication" in error_msg.lower() or "credentials" in error_msg.lower():
+            return jsonify({"success": False, "error": f"Authentication error: {error_msg}", "env_status": "auth_error"}), 401
+        
+        # Return sanitized error for SecOps errors (these are generally safe to show to users)
+        return jsonify({"success": False, "error": error_msg, "env_status": "error"}), 400
     except ValueError as e:
         app.logger.error(f"Value Error in {tool_name}: {e}")
+        # Value errors are typically due to invalid input, safe to return to user
         return jsonify({"success": False, "error": str(e), "env_status": "error"}), 400
     except AuthenticationError as e:
         app.logger.error(f"Authentication Error in {tool_name}: {e}")
+        # Don't expose the raw error message for auth errors
         return jsonify({"success": False, "error": "Authentication required. Please re-login.", "env_status": "auth_error"}), 401
     except Exception as e:
+        # For unexpected errors, log the full details but return a generic message
         app.logger.error(f"Unexpected error in {tool_name}: {e}", exc_info=True)
-        # Check if it's a network or connection error
         error_str = str(e).lower()
+        
+        # Check if it's a network or connection error
         if "network" in error_str or "connection" in error_str or "connect" in error_str or "socket" in error_str:
-            return jsonify({"success": False, "error": f"Network error: {str(e)}", "env_status": "error"}), 503
-        return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}", "env_status": "error"}), 500
+            return jsonify({"success": False, "error": "Network connection error. Please check your internet connection and try again.", "env_status": "error"}), 503
+        
+        # For production, don't expose raw error messages for unexpected errors
+        if os.environ.get("FLASK_DEBUG", "False").lower() == "true":
+            # In debug mode, include the actual error for troubleshooting
+            return jsonify({"success": False, "error": f"An unexpected error occurred: {str(e)}", "env_status": "error"}), 500
+        else:
+            # In production, use a generic message
+            return jsonify({"success": False, "error": "An unexpected server error occurred. Please try again or contact support.", "env_status": "error"}), 500
 
 # --- Environment Management API ---
 @app.route('/api/environments', methods=['GET'])
@@ -1027,252 +1056,254 @@ def tool_gemini_opt_in():
         app.logger.error(f"Unexpected error during Gemini opt-in: {e}", exc_info=True)
         return jsonify({"success": False, "error": "An unexpected server error occurred during Gemini opt-in.", "env_status": "error"}), 500
 
-@app.route('/api/debug/auth_status', methods=['GET'])
-def debug_auth_status():
-    try:
-        creds = get_credentials_from_session()
-        if not creds:
-            return jsonify({
-                "authenticated": False,
-                "message": "No credentials found in session."
-            })
-        
-        # Check if credentials are valid
-        is_valid = creds.valid
-        if not is_valid and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-                is_valid = True
-                session['credentials'] = credentials_to_dict(creds)
-            except Exception as e:
+# Debug endpoints that should only be available in debug mode
+def register_debug_endpoints(app):
+    @app.route('/api/debug/auth_status', methods=['GET'])
+    def debug_auth_status():
+        try:
+            creds = get_credentials_from_session()
+            if not creds:
                 return jsonify({
                     "authenticated": False,
-                    "message": f"Credentials expired and refresh failed: {str(e)}",
-                    "scopes": creds.scopes
+                    "message": "No credentials found in session."
                 })
-        
-        return jsonify({
-            "authenticated": is_valid,
-            "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
-            "has_refresh_token": creds.refresh_token is not None,
-            "scopes": creds.scopes,
-            "has_cloud_platform_scope": "https://www.googleapis.com/auth/cloud-platform" in creds.scopes,
-            "project_id": creds.client_id.split('-')[0] if creds.client_id else None
-        })
-    except Exception as e:
-        return jsonify({
-            "authenticated": False,
-            "error": str(e)
-        }), 500
-
-@app.route('/api/debug/test_secops_auth', methods=['GET'])
-def debug_test_secops_auth():
-    """
-    Debug endpoint to test SecOps SDK authentication with OAuth credentials.
-    """
-    try:
-        # Get credentials from session
-        creds_dict = session.get('credentials')
-        if not creds_dict:
-            return jsonify({
-                "success": False,
-                "error": "No credentials found in session",
-                "message": "Please login first"
-            }), 401
-        
-        # Create OAuth credentials object
-        from google.auth.transport.requests import Request
-        
-        oauth_creds = OAuth2Credentials(
-            token=creds_dict.get('token'),
-            refresh_token=creds_dict.get('refresh_token'),
-            token_uri=creds_dict.get('token_uri'),
-            client_id=creds_dict.get('client_id'),
-            client_secret=creds_dict.get('client_secret'),
-            scopes=creds_dict.get('scopes')
-        )
-        
-        # Refresh if needed
-        if oauth_creds.expired and oauth_creds.refresh_token:
-            oauth_creds.refresh(Request())
-            session['credentials'] = credentials_to_dict(oauth_creds)
-        
-        # Create our adapter with the with_scopes method
-        adapter_creds = OAuth2CredentialsAdapter(
-            token=oauth_creds.token,
-            refresh_token=oauth_creds.refresh_token,
-            token_uri=oauth_creds.token_uri,
-            client_id=oauth_creds.client_id,
-            client_secret=oauth_creds.client_secret,
-            scopes=oauth_creds.scopes,
-            expiry=oauth_creds.expiry
-        )
-        
-        # Try to initialize SecOpsClient with our adapter
-        try:
-            from secops import SecOpsClient
-            secops_client = SecOpsClient(credentials=adapter_creds)
             
-            # Check if with_scopes method is available
-            has_with_scopes = hasattr(adapter_creds, 'with_scopes')
-            
-            # Get basic details for response
-            creds_info = {
-                "token_valid": not oauth_creds.expired,
-                "has_refresh_token": bool(oauth_creds.refresh_token),
-                "scopes": oauth_creds.scopes,
-                "client_id": oauth_creds.client_id,
-                "has_with_scopes": has_with_scopes,
-                "adapter_class": adapter_creds.__class__.__name__
-            }
+            # Check if credentials are valid
+            is_valid = creds.valid
+            if not is_valid and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                    is_valid = True
+                    session['credentials'] = credentials_to_dict(creds)
+                except Exception as e:
+                    return jsonify({
+                        "authenticated": False,
+                        "message": f"Credentials expired and refresh failed: {str(e)}",
+                        "scopes": creds.scopes
+                    })
             
             return jsonify({
-                "success": True,
-                "message": "Successfully initialized SecOpsClient with OAuth credentials adapter",
-                "credentials_info": creds_info
+                "authenticated": is_valid,
+                "token_expiry": creds.expiry.isoformat() if creds.expiry else None,
+                "has_refresh_token": creds.refresh_token is not None,
+                "scopes": creds.scopes,
+                "has_cloud_platform_scope": "https://www.googleapis.com/auth/cloud-platform" in creds.scopes,
+                "project_id": creds.client_id.split('-')[0] if creds.client_id else None
             })
         except Exception as e:
             return jsonify({
-                "success": False,
-                "error": f"Failed to initialize SecOpsClient: {str(e)}",
-                "error_type": type(e).__name__,
-                "credentials_info": {
-                    "token_exists": bool(creds_dict.get('token')),
-                    "refresh_token_exists": bool(creds_dict.get('refresh_token')),
-                    "scopes": creds_dict.get('scopes'),
-                    "adapter_created": True
-                }
+                "authenticated": False,
+                "error": str(e)
             }), 500
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": f"Unexpected error: {str(e)}",
-            "error_type": type(e).__name__
-        }), 500
 
-@app.route('/api/debug/test_chronicle_call', methods=['GET'])
-def debug_test_chronicle_call():
-    """
-    Debug endpoint to test a simple Chronicle API call.
-    This will try to list log types which is a lightweight API call.
-    """
-    try:
-        # Get environment index from query param, default to 0
-        env_index = request.args.get('env_index', 0, type=int)
-        
-        # Get credentials from session
-        creds_dict = session.get('credentials')
-        if not creds_dict:
-            return jsonify({
-                "success": False,
-                "error": "No credentials found in session",
-                "message": "Please login first"
-            }), 401
-        
-        # Check if we have environments configured
-        environments = session.get('environments', [])
-        if not environments:
-            return jsonify({
-                "success": False,
-                "error": "No environments configured",
-                "message": "Please add an environment first"
-            }), 400
-        
-        if not (0 <= env_index < len(environments)):
-            return jsonify({
-                "success": False,
-                "error": f"Environment index {env_index} out of range",
-                "message": f"Valid indices are 0-{len(environments)-1}"
-            }), 400
-        
-        # Get environment details
-        env = environments[env_index]
-        
-        # Create OAuth credentials
-        from google.auth.transport.requests import Request
-        
-        oauth_creds = OAuth2Credentials(
-            token=creds_dict.get('token'),
-            refresh_token=creds_dict.get('refresh_token'),
-            token_uri=creds_dict.get('token_uri'),
-            client_id=creds_dict.get('client_id'),
-            client_secret=creds_dict.get('client_secret'),
-            scopes=creds_dict.get('scopes')
-        )
-        
-        # Refresh if needed
-        if oauth_creds.expired and oauth_creds.refresh_token:
-            oauth_creds.refresh(Request())
-            session['credentials'] = credentials_to_dict(oauth_creds)
-            
-        # Create our adapter with the with_scopes method
-        adapter_creds = OAuth2CredentialsAdapter(
-            token=oauth_creds.token,
-            refresh_token=oauth_creds.refresh_token,
-            token_uri=oauth_creds.token_uri,
-            client_id=oauth_creds.client_id,
-            client_secret=oauth_creds.client_secret,
-            scopes=oauth_creds.scopes,
-            expiry=oauth_creds.expiry
-        )
-        
-        # Try to initialize SecOpsClient and Chronicle client
+    @app.route('/api/debug/test_secops_auth', methods=['GET'])
+    def debug_test_secops_auth():
+        """
+        Debug endpoint to test SecOps SDK authentication with OAuth credentials.
+        """
         try:
-            from secops import SecOpsClient
+            # Get credentials from session
+            creds_dict = session.get('credentials')
+            if not creds_dict:
+                return jsonify({
+                    "success": False,
+                    "error": "No credentials found in session",
+                    "message": "Please login first"
+                }), 401
             
-            app.logger.info(f"Initializing SecOpsClient for Chronicle API test")
-            secops_client = SecOpsClient(credentials=adapter_creds)
+            # Create OAuth credentials object
+            from google.auth.transport.requests import Request
             
-            app.logger.info(f"Initializing Chronicle client with customer_id={env['customerId']}, project_id={env['projectId']}, region={env['region']}")
-            chronicle_client = secops_client.chronicle(
-                customer_id=env['customerId'],
-                project_id=env['projectId'],
-                region=env['region']
+            oauth_creds = OAuth2Credentials(
+                token=creds_dict.get('token'),
+                refresh_token=creds_dict.get('refresh_token'),
+                token_uri=creds_dict.get('token_uri'),
+                client_id=creds_dict.get('client_id'),
+                client_secret=creds_dict.get('client_secret'),
+                scopes=creds_dict.get('scopes')
             )
             
-            # Make a simple API call
-            app.logger.info("Making API call to get log types")
-            # Try to get the first few log types (limit to 3 for this test)
-            log_types = chronicle_client.get_all_log_types()[:3]
+            # Refresh if needed
+            if oauth_creds.expired and oauth_creds.refresh_token:
+                oauth_creds.refresh(Request())
+                session['credentials'] = credentials_to_dict(oauth_creds)
             
+            # Create our adapter with the with_scopes method
+            adapter_creds = OAuth2CredentialsAdapter(
+                token=oauth_creds.token,
+                refresh_token=oauth_creds.refresh_token,
+                token_uri=oauth_creds.token_uri,
+                client_id=oauth_creds.client_id,
+                client_secret=oauth_creds.client_secret,
+                scopes=oauth_creds.scopes,
+                expiry=oauth_creds.expiry
+            )
+            
+            # Try to initialize SecOpsClient with our adapter
+            try:
+                from secops import SecOpsClient
+                secops_client = SecOpsClient(credentials=adapter_creds)
+                
+                # Check if with_scopes method is available
+                has_with_scopes = hasattr(adapter_creds, 'with_scopes')
+                
+                # Get basic details for response
+                creds_info = {
+                    "token_valid": not oauth_creds.expired,
+                    "has_refresh_token": bool(oauth_creds.refresh_token),
+                    "scopes": oauth_creds.scopes,
+                    "client_id": oauth_creds.client_id,
+                    "has_with_scopes": has_with_scopes,
+                    "adapter_class": adapter_creds.__class__.__name__
+                }
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Successfully initialized SecOpsClient with OAuth credentials adapter",
+                    "credentials_info": creds_info
+                })
+            except Exception as e:
+                return jsonify({
+                    "success": False,
+                    "error": f"Failed to initialize SecOpsClient: {str(e)}",
+                    "error_type": type(e).__name__,
+                    "credentials_info": {
+                        "token_exists": bool(creds_dict.get('token')),
+                        "refresh_token_exists": bool(creds_dict.get('refresh_token')),
+                        "scopes": creds_dict.get('scopes'),
+                        "adapter_created": True
+                    }
+                }), 500
+        except Exception as e:
             return jsonify({
-                "success": True,
-                "message": "Successfully made Chronicle API call",
-                "data": {
-                    "log_types_sample": [
-                        {
-                            "id": lt.id,
-                            "description": lt.description
-                        } for lt in log_types
-                    ],
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
+                "error_type": type(e).__name__
+            }), 500
+
+    @app.route('/api/debug/test_chronicle_call', methods=['GET'])
+    def debug_test_chronicle_call():
+        """
+        Debug endpoint to test a simple Chronicle API call.
+        This will try to list log types which is a lightweight API call.
+        """
+        try:
+            # Get environment index from query param, default to 0
+            env_index = request.args.get('env_index', 0, type=int)
+            
+            # Get credentials from session
+            creds_dict = session.get('credentials')
+            if not creds_dict:
+                return jsonify({
+                    "success": False,
+                    "error": "No credentials found in session",
+                    "message": "Please login first"
+                }), 401
+            
+            # Check if we have environments configured
+            environments = session.get('environments', [])
+            if not environments:
+                return jsonify({
+                    "success": False,
+                    "error": "No environments configured",
+                    "message": "Please add an environment first"
+                }), 400
+            
+            if not (0 <= env_index < len(environments)):
+                return jsonify({
+                    "success": False,
+                    "error": f"Environment index {env_index} out of range",
+                    "message": f"Valid indices are 0-{len(environments)-1}"
+                }), 400
+            
+            # Get environment details
+            env = environments[env_index]
+            
+            # Create OAuth credentials
+            from google.auth.transport.requests import Request
+            
+            oauth_creds = OAuth2Credentials(
+                token=creds_dict.get('token'),
+                refresh_token=creds_dict.get('refresh_token'),
+                token_uri=creds_dict.get('token_uri'),
+                client_id=creds_dict.get('client_id'),
+                client_secret=creds_dict.get('client_secret'),
+                scopes=creds_dict.get('scopes')
+            )
+            
+            # Refresh if needed
+            if oauth_creds.expired and oauth_creds.refresh_token:
+                oauth_creds.refresh(Request())
+                session['credentials'] = credentials_to_dict(oauth_creds)
+                
+            # Create our adapter with the with_scopes method
+            adapter_creds = OAuth2CredentialsAdapter(
+                token=oauth_creds.token,
+                refresh_token=oauth_creds.refresh_token,
+                token_uri=oauth_creds.token_uri,
+                client_id=oauth_creds.client_id,
+                client_secret=oauth_creds.client_secret,
+                scopes=oauth_creds.scopes,
+                expiry=oauth_creds.expiry
+            )
+            
+            # Try to initialize SecOpsClient and Chronicle client
+            try:
+                from secops import SecOpsClient
+                
+                app.logger.info(f"Initializing SecOpsClient for Chronicle API test")
+                secops_client = SecOpsClient(credentials=adapter_creds)
+                
+                app.logger.info(f"Initializing Chronicle client with customer_id={env['customerId']}, project_id={env['projectId']}, region={env['region']}")
+                chronicle_client = secops_client.chronicle(
+                    customer_id=env['customerId'],
+                    project_id=env['projectId'],
+                    region=env['region']
+                )
+                
+                # Make a simple API call
+                app.logger.info("Making API call to get log types")
+                # Try to get the first few log types (limit to 3 for this test)
+                log_types = chronicle_client.get_all_log_types()[:3]
+                
+                return jsonify({
+                    "success": True,
+                    "message": "Successfully made Chronicle API call",
+                    "data": {
+                        "log_types_sample": [
+                            {
+                                "id": lt.id,
+                                "description": lt.description
+                            } for lt in log_types
+                        ],
+                        "environment": {
+                            "name": env["name"],
+                            "customer_id": env["customerId"],
+                            "project_id": env["projectId"],
+                            "region": env["region"]
+                        }
+                    }
+                })
+            except Exception as e:
+                app.logger.error(f"API call failed: {e}", exc_info=True)
+                return jsonify({
+                    "success": False,
+                    "error": f"Chronicle API call failed: {str(e)}",
+                    "error_type": type(e).__name__,
                     "environment": {
                         "name": env["name"],
                         "customer_id": env["customerId"],
                         "project_id": env["projectId"],
                         "region": env["region"]
                     }
-                }
-            })
+                }), 500
         except Exception as e:
-            app.logger.error(f"API call failed: {e}", exc_info=True)
+            app.logger.error(f"Test failed: {e}", exc_info=True)
             return jsonify({
                 "success": False,
-                "error": f"Chronicle API call failed: {str(e)}",
-                "error_type": type(e).__name__,
-                "environment": {
-                    "name": env["name"],
-                    "customer_id": env["customerId"],
-                    "project_id": env["projectId"],
-                    "region": env["region"]
-                }
+                "error": f"Test failed: {str(e)}",
+                "error_type": type(e).__name__
             }), 500
-    except Exception as e:
-        app.logger.error(f"Test failed: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "error": f"Test failed: {str(e)}",
-            "error_type": type(e).__name__
-        }), 500
 
 @app.route('/api/tools/validate_query', methods=['POST'])
 def tool_validate_query():
@@ -1419,9 +1450,16 @@ def tool_rule_set_batch_update():
     except json.JSONDecodeError:
         return jsonify({"success": False, "error": "Invalid JSON for deployments", "env_status": "error"}), 400
 
+# Register debug endpoints only in debug mode
+debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
+if debug_mode:
+    app.logger.warning("Debug mode is enabled - registering debug endpoints")
+    register_debug_endpoints(app)
+else:
+    app.logger.info("Running in production mode - debug endpoints are disabled")
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
-    debug_mode = os.environ.get("FLASK_DEBUG", "False").lower() == "true"
     
     # For local development without App Engine context (e.g. running directly with python app.py)
     # ensure HTTPS if not debug, as OAuth typically requires it.

@@ -816,23 +816,71 @@
         environments.forEach((env, index) => {
             const envItem = document.createElement('div');
             envItem.className = `p-2 rounded-md cursor-pointer hover:bg-slate-700 text-sm flex items-center ${index === selectedEnvIndex ? 'bg-sky-600 text-white font-medium' : 'text-slate-300'}`;
-            envItem.innerHTML = `<span class="env-status-dot env-status-${env.status || 'unknown'}"></span> <span class="flex-1 truncate">${env.name}</span>`;
+            
+            // Create status dot safely
+            const envStatusDot = document.createElement('span');
+            envStatusDot.className = `env-status-dot env-status-${env.status || 'unknown'}`;
+            
+            // Create name span safely
+            const envNameSpan = document.createElement('span');
+            envNameSpan.className = 'flex-1 truncate';
+            envNameSpan.textContent = env.name;
+            
+            // Append elements
+            envItem.appendChild(envStatusDot);
+            envItem.appendChild(envNameSpan);
+            
             envItem.onclick = () => selectEnvironment(index);
             environmentsListDiv.appendChild(envItem);
 
             const modalEnvItem = document.createElement('div');
             modalEnvItem.className = 'p-3 bg-slate-700 rounded-md flex justify-between items-center';
-            modalEnvItem.innerHTML = `
-                <div>
-                    <span class="env-status-dot env-status-${env.status || 'unknown'}"></span>
-                    <span class="font-medium text-slate-200">${env.name}</span>
-                    <p class="text-xs text-slate-400">Cust ID: ${env.customerId} | Proj ID: ${env.projectId} | Region: ${env.region}</p>
-                </div>
-                <div class="space-x-2">
-                    <button class="edit-env-btn text-sky-400 hover:text-sky-300" data-index="${index}"><i class="fas fa-edit"></i></button>
-                    <button class="delete-env-btn text-rose-500 hover:text-rose-400" data-index="${index}"><i class="fas fa-trash"></i></button>
-                </div>
-            `;
+            
+            // Create left info container
+            const infoDiv = document.createElement('div');
+            
+            // Add status dot
+            const modalStatusDot = document.createElement('span');
+            modalStatusDot.className = `env-status-dot env-status-${env.status || 'unknown'}`;
+            infoDiv.appendChild(modalStatusDot);
+            
+            // Add name
+            const modalNameSpan = document.createElement('span');
+            modalNameSpan.className = 'font-medium text-slate-200';
+            modalNameSpan.textContent = env.name;
+            infoDiv.appendChild(modalNameSpan);
+            
+            // Add details
+            const detailsP = document.createElement('p');
+            detailsP.className = 'text-xs text-slate-400';
+            detailsP.textContent = `Cust ID: ${env.customerId} | Proj ID: ${env.projectId} | Region: ${env.region}`;
+            infoDiv.appendChild(detailsP);
+            
+            // Create buttons container
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.className = 'space-x-2';
+            
+            // Edit button
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-env-btn text-sky-400 hover:text-sky-300';
+            editBtn.dataset.index = index;
+            const editIcon = document.createElement('i');
+            editIcon.className = 'fas fa-edit';
+            editBtn.appendChild(editIcon);
+            buttonsDiv.appendChild(editBtn);
+            
+            // Delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-env-btn text-rose-500 hover:text-rose-400';
+            deleteBtn.dataset.index = index;
+            const deleteIcon = document.createElement('i');
+            deleteIcon.className = 'fas fa-trash';
+            deleteBtn.appendChild(deleteIcon);
+            buttonsDiv.appendChild(deleteBtn);
+            
+            // Append both containers to main item
+            modalEnvItem.appendChild(infoDiv);
+            modalEnvItem.appendChild(buttonsDiv);
             envModalListDiv.appendChild(modalEnvItem);
         });
         
@@ -1125,7 +1173,16 @@
         if (param.note) {
             const noteP = document.createElement('p');
             noteP.className = 'text-sm text-slate-400 mt-2 italic';
-            noteP.innerHTML = `<i class="fas fa-info-circle mr-1"></i> ${param.note}`;
+            
+            // Create info icon safely
+            const infoIcon = document.createElement('i');
+            infoIcon.className = 'fas fa-info-circle mr-1';
+            noteP.appendChild(infoIcon);
+            
+            // Add note text safely
+            const noteText = document.createTextNode(` ${param.note}`);
+            noteP.appendChild(noteText);
+            
             paramDiv.appendChild(noteP);
         }
         return paramDiv;
@@ -1689,8 +1746,8 @@
                         paramsPreview = JSON.stringify(item.params, null, 2);
                         if (paramsPreview.length > 200) paramsPreview = paramsPreview.substring(0,200) + "...";
                         
-                        // Ensure valid JSON in data attributes by properly escaping
-                        safePayload = JSON.stringify(item.params).replace(/"/g, '&quot;');
+                        // Don't escape quotes - setAttribute will handle the proper escaping
+                        safePayload = JSON.stringify(item.params);
                     } catch (err) {
                         console.error('Error processing history item params:', err);
                         paramsPreview = "Error processing parameters";
@@ -1699,17 +1756,41 @@
 
                     const timestamp = item.timestamp ? new Date(item.timestamp).toLocaleString() : 'Unknown time';
                     
-                    historyItemDiv.innerHTML = `
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="font-medium text-slate-200 text-base">${item.tool} - ${timestamp}</span>
-                            <button class="text-sky-400 hover:text-sky-300 text-sm load-history-btn px-3 py-1 bg-sky-900/30 rounded-md" 
-                                    data-history-payload="${safePayload}" 
-                                    data-tool-id="${toolId}">
-                                <i class="fas fa-redo mr-1"></i> Load
-                            </button>
-                        </div>
-                        <pre class="text-sm text-white mt-2 whitespace-pre-wrap break-all bg-slate-850 p-3 rounded-md border border-slate-600">${paramsPreview}</pre>
-                    `;
+                    // Create the header container
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = 'flex justify-between items-center mb-2';
+                    
+                    // Create and add the timestamp span
+                    const timestampSpan = document.createElement('span');
+                    timestampSpan.className = 'font-medium text-slate-200 text-base';
+                    timestampSpan.textContent = `${item.tool} - ${timestamp}`;
+                    headerDiv.appendChild(timestampSpan);
+                    
+                    // Create and add the load button
+                    const loadButton = document.createElement('button');
+                    loadButton.className = 'text-sky-400 hover:text-sky-300 text-sm load-history-btn px-3 py-1 bg-sky-900/30 rounded-md';
+                    loadButton.setAttribute('data-history-payload', safePayload);
+                    loadButton.setAttribute('data-tool-id', toolId);
+                    
+                    // Add icon to the button
+                    const buttonIcon = document.createElement('i');
+                    buttonIcon.className = 'fas fa-redo mr-1';
+                    loadButton.appendChild(buttonIcon);
+                    
+                    // Add text to the button
+                    const buttonText = document.createTextNode(' Load');
+                    loadButton.appendChild(buttonText);
+                    
+                    headerDiv.appendChild(loadButton);
+                    
+                    // Create the parameters preview
+                    const preElement = document.createElement('pre');
+                    preElement.className = 'text-sm text-white mt-2 whitespace-pre-wrap break-all bg-slate-850 p-3 rounded-md border border-slate-600';
+                    preElement.textContent = paramsPreview;
+                    
+                    // Add elements to the history item div
+                    historyItemDiv.appendChild(headerDiv);
+                    historyItemDiv.appendChild(preElement);
                     historyModalContent.appendChild(historyItemDiv);
                 } catch (err) {
                     console.error('Error creating history item:', err);
